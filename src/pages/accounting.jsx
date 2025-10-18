@@ -1,10 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import DetailAccountingPopup from '../components/accounting/detailAccounting';
 import AdvanceAccountingPopup from '../components/accounting/advanceAccounting';
 import CompleteAccountingPopup from '../components/accounting/completeAccounting';
 import PayAccountingPopup from '../components/accounting/payAccounting';
+import { useReceipts } from '../hooks/useAccounting';
 
 const AccountingPage = () => {
+    // Sử dụng custom hook để quản lý danh sách biên lai
+    const { receipts, loading, error, fetchReceipts } = useReceipts();
+
     // State for receipt detail popup
     const [showDetailPopup, setShowDetailPopup] = useState(false);
     const [selectedReceipt, setSelectedReceipt] = useState(null);
@@ -27,6 +31,52 @@ const AccountingPage = () => {
 
     // State lưu trữ dịch vụ đã thêm
     const [services, setServices] = useState([]);
+
+    // Load danh sách biên lai khi component mount
+    useEffect(() => {
+        fetchReceipts();
+    }, [fetchReceipts]);
+
+    // Helper function: Format số tiền
+    const formatCurrency = (amount) => {
+        return new Intl.NumberFormat('vi-VN').format(amount) + ' ₫';
+    };
+
+    // Helper function: Format ngày tháng
+    const formatDate = (dateString) => {
+        const date = new Date(dateString);
+        return date.toLocaleDateString('vi-VN', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric'
+        });
+    };
+
+    // Helper function: Format ngày giờ đầy đủ
+    const formatDateTime = (dateString) => {
+        const date = new Date(dateString);
+        return date.toLocaleString('vi-VN', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    };
+
+    // Helper function: Lấy trạng thái thanh toán
+    const getPaymentStatus = (status) => {
+        switch (status) {
+            case 0:
+                return { label: 'CHƯA TT', className: 'bg-red-50 text-red-600' };
+            case 1:
+                return { label: 'ĐÃ TT', className: 'bg-green-50 text-green-800' };
+            case 2:
+                return { label: 'TẠM ỨNG', className: 'bg-yellow-50 text-yellow-600' };
+            default:
+                return { label: 'KHÔNG XĐ', className: 'bg-gray-50 text-gray-600' };
+        }
+    };
 
     const handleSubmit = (e) => {
         e.preventDefault();
@@ -358,262 +408,81 @@ const AccountingPage = () => {
                             </tr>
                         </thead>
                         <tbody>
-                            {/* Row 1 */}
-                            <tr className="border-t border-gray-100">
-                                <td className="py-4 px-4 text-sm text-gray-800">VP2025000008</td>
-                                <td className="py-4 px-4 text-sm text-gray-800">HS001</td>
-                                <td className="py-4 px-4 text-sm text-gray-800 text-center font-bold">200,000 ₫</td>
-                                <td className="py-4 px-4 text-sm text-gray-800 text-center font-bold">200,000 ₫</td>
-                                <td className="py-4 px-4 text-center">
-                                    <span className="px-3 py-1 bg-red-50 text-red-600 text-xs rounded-full">CHƯA TT</span>
-                                </td>
-                                <td className="py-4 px-4 text-sm text-gray-800 text-center">07/10/2025</td>
-                                <td className="py-4 px-4 text-center">
-                                    <button
-                                        onClick={() => handleViewDetail({
-                                            code: 'VP2025000008',
-                                            recordCode: 'HS001',
-                                            createdDate: '07/10/2025 - 16:18',
-                                            collector: 'admin',
-                                            totalAmount: 200000,
-                                            patientPaid: 200000,
-                                            insuranceRate: '0%',
-                                            insuranceAmount: 0,
-                                            status: 'unpaid',
-                                            note: 'Khám tổng quát',
-                                            services: [
-                                                {
-                                                    code: 'DV001',
-                                                    quantity: 1,
-                                                    unitPrice: 200000,
-                                                    amount: 200000,
-                                                    insuranceAmount: 0
-                                                }
-                                            ]
-                                        })}
-                                        className="px-3 py-1.5 border border-gray-200 rounded text-gray-500 text-xs hover:bg-gray-50 cursor-pointer"
-                                    >
-                                        Chi tiết
-                                    </button>
-                                </td>
-                            </tr>
-
-                            {/* Row 2 */}
-                            <tr className="border-t border-gray-100 bg-white">
-                                <td className="py-4 px-4 text-sm text-gray-800">VP2025000007</td>
-                                <td className="py-4 px-4 text-sm text-gray-800">HS002</td>
-                                <td className="py-4 px-4 text-sm text-gray-800 text-center font-bold">150,000 ₫</td>
-                                <td className="py-4 px-4 text-sm text-gray-800 text-center font-bold">180,000 ₫</td>
-                                <td className="py-4 px-4 text-center">
-                                    <span className="px-3 py-1 bg-green-50 text-green-800 text-xs rounded-full">ĐÃ TT</span>
-                                </td>
-                                <td className="py-4 px-4 text-sm text-gray-800 text-center">06/10/2025</td>
-                                <td className="py-4 px-4 text-center">
-                                    <button className="px-3 py-1.5 border border-gray-200 rounded text-gray-500 text-xs hover:bg-gray-50">
-                                        Chi tiết
-                                    </button>
-                                </td>
-                            </tr>
-
-                            {/* Row 3 */}
-                            <tr className="border-t border-gray-100">
-                                <td className="py-4 px-4 text-sm text-gray-800">VP2025000006</td>
-                                <td className="py-4 px-4 text-sm text-gray-800">HS003</td>
-                                <td className="py-4 px-4 text-sm text-gray-800 text-center font-bold">320,000 ₫</td>
-                                <td className="py-4 px-4 text-sm text-gray-800 text-center font-bold">450,000 ₫</td>
-                                <td className="py-4 px-4 text-center">
-                                    <span className="px-3 py-1 bg-red-50 text-red-600 text-xs rounded-full">CHƯA TT</span>
-                                </td>
-                                <td className="py-4 px-4 text-sm text-gray-800 text-center">05/10/2025</td>
-                                <td className="py-4 px-4 text-center">
-                                    <button
-                                        onClick={() => handleViewDetail({
-                                            code: 'VP2025000006',
-                                            recordCode: 'HS003',
-                                            createdDate: '05/10/2025 - 10:15',
-                                            collector: 'admin',
-                                            totalAmount: 450000,
-                                            patientPaid: 320000,
-                                            insuranceRate: '30%',
-                                            insuranceAmount: 130000,
-                                            status: 'unpaid',
-                                            note: 'Khám nội',
-                                            services: [
-                                                {
-                                                    code: 'DV003',
-                                                    quantity: 1,
-                                                    unitPrice: 300000,
-                                                    amount: 300000,
-                                                    insuranceAmount: 90000
-                                                },
-                                                {
-                                                    code: 'DV004',
-                                                    quantity: 1,
-                                                    unitPrice: 150000,
-                                                    amount: 150000,
-                                                    insuranceAmount: 40000
-                                                }
-                                            ]
-                                        })}
-                                        className="px-3 py-1.5 border border-gray-200 rounded text-gray-500 text-xs hover:bg-gray-50">
-                                        Chi tiết
-                                    </button>
-                                </td>
-                            </tr>
-
-                            {/* Row 4 */}
-                            <tr className="border-t border-gray-100 bg-white">
-                                <td className="py-4 px-4 text-sm text-gray-800">VP2025000005</td>
-                                <td className="py-4 px-4 text-sm text-gray-800">HS004</td>
-                                <td className="py-4 px-4 text-sm text-gray-800 text-center font-bold">85,000 ₫</td>
-                                <td className="py-4 px-4 text-sm text-gray-800 text-center font-bold">85,000 ₫</td>
-                                <td className="py-4 px-4 text-center">
-                                    <span className="px-3 py-1 bg-green-50 text-green-800 text-xs rounded-full">ĐÃ TT</span>
-                                </td>
-                                <td className="py-4 px-4 text-sm text-gray-800 text-center">04/10/2025</td>
-                                <td className="py-4 px-4 text-center">
-                                    <button
-                                        onClick={() => handleViewDetail({
-                                            code: 'VP2025000005',
-                                            recordCode: 'HS004',
-                                            createdDate: '04/10/2025 - 09:45',
-                                            collector: 'admin',
-                                            totalAmount: 85000,
-                                            patientPaid: 85000,
-                                            insuranceRate: '0%',
-                                            insuranceAmount: 0,
-                                            status: 'paid',
-                                            note: 'Phí giấy tờ',
-                                            services: [
-                                                {
-                                                    code: 'DV005',
-                                                    quantity: 1,
-                                                    unitPrice: 85000,
-                                                    amount: 85000,
-                                                    insuranceAmount: 0
-                                                }
-                                            ]
-                                        })}
-                                        className="px-3 py-1.5 border border-gray-200 rounded text-gray-500 text-xs hover:bg-gray-50"
-                                    >
-                                        Chi tiết
-                                    </button>
-                                </td>
-                            </tr>
-
-                            {/* Row 5 */}
-                            <tr className="border-t border-gray-100">
-                                <td className="py-4 px-4 text-sm text-gray-800">VP2025000004</td>
-                                <td className="py-4 px-4 text-sm text-gray-800">HS005</td>
-                                <td className="py-4 px-4 text-sm text-gray-800 text-center font-bold">275,000 ₫</td>
-                                <td className="py-4 px-4 text-sm text-gray-800 text-center font-bold">350,000 ₫</td>
-                                <td className="py-4 px-4 text-center">
-                                    <span className="px-3 py-1 bg-red-50 text-red-600 text-xs rounded-full">CHƯA TT</span>
-                                </td>
-                                <td className="py-4 px-4 text-sm text-gray-800 text-center">03/10/2025</td>
-                                <td className="py-4 px-4 text-center">
-                                    <button
-                                        onClick={() => handleViewDetail({
-                                            code: 'VP2025000004',
-                                            recordCode: 'HS005',
-                                            createdDate: '03/10/2025 - 11:30',
-                                            collector: 'admin',
-                                            totalAmount: 350000,
-                                            patientPaid: 275000,
-                                            insuranceRate: '25%',
-                                            insuranceAmount: 75000,
-                                            status: 'unpaid',
-                                            note: 'Xét nghiệm',
-                                            services: [
-                                                {
-                                                    code: 'DV006',
-                                                    quantity: 1,
-                                                    unitPrice: 350000,
-                                                    amount: 350000,
-                                                    insuranceAmount: 75000
-                                                }
-                                            ]
-                                        })}
-                                        className="px-3 py-1.5 border border-gray-200 rounded text-gray-500 text-xs hover:bg-gray-50"
-                                    >
-                                        Chi tiết
-                                    </button>
-                                </td>
-                            </tr>
-
-                            {/* Row 6 */}
-                            <tr className="border-t border-gray-100 bg-white">
-                                <td className="py-4 px-4 text-sm text-gray-800">VP2025000003</td>
-                                <td className="py-4 px-4 text-sm text-gray-800">HS006</td>
-                                <td className="py-4 px-4 text-sm text-gray-800 text-center font-bold">275,000 ₫</td>
-                                <td className="py-4 px-4 text-sm text-gray-800 text-center font-bold">350,000 ₫</td>
-                                <td className="py-4 px-4 text-center">
-                                    <span className="px-3 py-1 bg-red-50 text-red-600 text-xs rounded-full">CHƯA TT</span>
-                                </td>
-                                <td className="py-4 px-4 text-sm text-gray-800 text-center">02/10/2025</td>
-                                <td className="py-4 px-4 text-center">
-                                    <button
-                                        onClick={() => handleViewDetail({
-                                            code: 'VP2025000003',
-                                            recordCode: 'HS006',
-                                            createdDate: '02/10/2025 - 08:45',
-                                            collector: 'admin',
-                                            totalAmount: 350000,
-                                            patientPaid: 275000,
-                                            insuranceRate: '25%',
-                                            insuranceAmount: 75000,
-                                            status: 'unpaid',
-                                            note: 'CT scan',
-                                            services: [
-                                                {
-                                                    code: 'DV007',
-                                                    quantity: 1,
-                                                    unitPrice: 350000,
-                                                    amount: 350000,
-                                                    insuranceAmount: 75000
-                                                }
-                                            ]
-                                        })}
-                                        className="px-3 py-1.5 border border-gray-200 rounded text-gray-500 text-xs hover:bg-gray-50"
-                                    >
-                                        Chi tiết
-                                    </button>
-                                </td>
-                            </tr>
-
-                            {/* Row 7 */}
-                            <tr className="border-t border-gray-100">
-                                <td className="py-4 px-4 text-sm text-gray-800">VP2025000002</td>
-                                <td className="py-4 px-4 text-sm text-gray-800">HS007</td>
-                                <td className="py-4 px-4 text-sm text-gray-800 text-center font-bold">185,000 ₫</td>
-                                <td className="py-4 px-4 text-sm text-gray-800 text-center font-bold">220,000 ₫</td>
-                                <td className="py-4 px-4 text-center">
-                                    <span className="px-3 py-1 bg-green-50 text-green-800 text-xs rounded-full">ĐÃ TT</span>
-                                </td>
-                                <td className="py-4 px-4 text-sm text-gray-800 text-center">01/10/2025</td>
-                                <td className="py-4 px-4 text-center">
-                                    <button className="px-3 py-1.5 border border-gray-200 rounded text-gray-500 text-xs hover:bg-gray-50">
-                                        Chi tiết
-                                    </button>
-                                </td>
-                            </tr>
-
-                            {/* Row 8 */}
-                            <tr className="border-t border-gray-100 bg-white">
-                                <td className="py-4 px-4 text-sm text-gray-800">VP2025000001</td>
-                                <td className="py-4 px-4 text-sm text-gray-800">HS008</td>
-                                <td className="py-4 px-4 text-sm text-gray-800 text-center font-bold">420,000 ₫</td>
-                                <td className="py-4 px-4 text-sm text-gray-800 text-center font-bold">420,000 ₫</td>
-                                <td className="py-4 px-4 text-center">
-                                    <span className="px-3 py-1 bg-green-50 text-green-800 text-xs rounded-full">ĐÃ TT</span>
-                                </td>
-                                <td className="py-4 px-4 text-sm text-gray-800 text-center">30/09/2025</td>
-                                <td className="py-4 px-4 text-center">
-                                    <button className="px-3 py-1.5 border border-gray-200 rounded text-gray-500 text-xs hover:bg-gray-50">
-                                        Chi tiết
-                                    </button>
-                                </td>
-                            </tr>
+                            {loading ? (
+                                <tr>
+                                    <td colSpan="7" className="py-8 text-center text-gray-500">
+                                        <i className="fas fa-spinner fa-spin mr-2"></i>
+                                        Đang tải dữ liệu...
+                                    </td>
+                                </tr>
+                            ) : error ? (
+                                <tr>
+                                    <td colSpan="7" className="py-8 text-center text-red-500">
+                                        <i className="fas fa-exclamation-circle mr-2"></i>
+                                        {error}
+                                    </td>
+                                </tr>
+                            ) : receipts.length === 0 ? (
+                                <tr>
+                                    <td colSpan="7" className="py-8 text-center text-gray-500">
+                                        <i className="fas fa-inbox mr-2"></i>
+                                        Chưa có biên lai nào
+                                    </td>
+                                </tr>
+                            ) : (
+                                receipts.map((receipt, index) => {
+                                    const paymentStatus = getPaymentStatus(receipt.trangThaiThanhToan);
+                                    return (
+                                        <tr
+                                            key={receipt.maVienPhi}
+                                            className={index % 2 === 0 ? 'border-t border-gray-100' : 'border-t border-gray-100 bg-white'}
+                                        >
+                                            <td className="py-4 px-4 text-sm text-gray-800">{receipt.maVienPhi}</td>
+                                            <td className="py-4 px-4 text-sm text-gray-800">{receipt.maHoSo}</td>
+                                            <td className="py-4 px-4 text-sm text-gray-800 text-center font-bold">
+                                                {formatCurrency(receipt.tienBenhNhanTra)}
+                                            </td>
+                                            <td className="py-4 px-4 text-sm text-gray-800 text-center font-bold">
+                                                {formatCurrency(receipt.tongTien)}
+                                            </td>
+                                            <td className="py-4 px-4 text-center">
+                                                <span className={`px-3 py-1 ${paymentStatus.className} text-xs rounded-full`}>
+                                                    {paymentStatus.label}
+                                                </span>
+                                            </td>
+                                            <td className="py-4 px-4 text-sm text-gray-800 text-center">
+                                                {formatDate(receipt.ngayTao)}
+                                            </td>
+                                            <td className="py-4 px-4 text-center">
+                                                <button
+                                                    onClick={() => handleViewDetail({
+                                                        code: receipt.maVienPhi,
+                                                        recordCode: receipt.maHoSo,
+                                                        createdDate: formatDateTime(receipt.ngayTao),
+                                                        collector: receipt.maNguoiThu || 'N/A',
+                                                        totalAmount: parseFloat(receipt.tongTien),
+                                                        patientPaid: parseFloat(receipt.tienBenhNhanTra),
+                                                        insuranceRate: `${receipt.tyLeBaoHiem}%`,
+                                                        insuranceAmount: parseFloat(receipt.tienBaoHiem),
+                                                        status: receipt.trangThaiThanhToan === 1 ? 'paid' : 'unpaid',
+                                                        note: receipt.ghiChu || '',
+                                                        services: receipt.chiTietVienPhi?.map(detail => ({
+                                                            code: detail.maDichVu,
+                                                            quantity: parseFloat(detail.soLuong),
+                                                            unitPrice: parseFloat(detail.donGia),
+                                                            amount: parseFloat(detail.thanhTien),
+                                                            insuranceAmount: parseFloat(detail.tienBaoHiem || 0)
+                                                        })) || []
+                                                    })}
+                                                    className="px-3 py-1.5 border border-gray-200 rounded text-gray-500 text-xs hover:bg-gray-50 cursor-pointer transition-colors"
+                                                >
+                                                    Chi tiết
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    );
+                                })
+                            )}
                         </tbody>
                     </table>
                 </div>

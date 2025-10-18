@@ -9,24 +9,25 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api'
  * Tạo headers mặc định cho request
  */
 const getDefaultHeaders = () => {
-    const headers = {
+    return {
         'Content-Type': 'application/json',
+        'ngrok-skip-browser-warning': '69420', // Bypass ngrok browser warning
     };
-
-    // Lấy token từ localStorage nếu có
-    const token = localStorage.getItem('accessToken');
-    if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-    }
-
-    return headers;
 };
 
 /**
  * Xử lý response từ API
  */
 const handleResponse = async (response) => {
-    const data = await response.json().catch(() => null);
+    // Kiểm tra content-type
+    const contentType = response.headers.get('content-type');
+    let data = null;
+
+    if (contentType && contentType.includes('application/json')) {
+        data = await response.json().catch(() => null);
+    } else {
+        data = await response.text().catch(() => null);
+    }
 
     if (!response.ok) {
         // Xử lý các lỗi HTTP
@@ -35,14 +36,6 @@ const handleResponse = async (response) => {
             message: data?.message || response.statusText || 'Đã xảy ra lỗi',
             data: data
         };
-
-        // Xử lý lỗi 401 - Unauthorized
-        if (response.status === 401) {
-            // Có thể redirect đến trang login
-            localStorage.removeItem('accessToken');
-            window.location.href = '/login';
-        }
-
         throw error;
     }
 
@@ -166,18 +159,8 @@ class ApiClient {
      */
     async upload(endpoint, formData, options = {}) {
         try {
-            const headers = {};
-            const token = localStorage.getItem('accessToken');
-            if (token) {
-                headers['Authorization'] = `Bearer ${token}`;
-            }
-
             const response = await fetch(`${API_BASE_URL}${endpoint}`, {
                 method: 'POST',
-                headers: {
-                    ...headers,
-                    ...options.headers
-                },
                 body: formData,
                 ...options
             });

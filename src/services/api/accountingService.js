@@ -7,7 +7,7 @@ import apiClient from './apiClient';
 
 const ACCOUNTING_ENDPOINTS = {
     // Biên lai viện phí
-    RECEIPTS: '/accounting/receipts',
+    RECEIPTS: '/now/v1/hospital-fee/bien-lai/tra-cuu',
     RECEIPT_DETAIL: (id) => `/accounting/receipts/${id}`,
     CREATE_RECEIPT: '/accounting/receipts',
     UPDATE_RECEIPT: (id) => `/accounting/receipts/${id}`,

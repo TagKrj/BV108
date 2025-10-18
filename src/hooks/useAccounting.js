@@ -29,8 +29,17 @@ export const useReceipts = () => {
         
         try {
             const response = await accountingService.getReceipts(params);
-            setReceipts(response.data || []);
             
+            // API trả về trực tiếp mảng data, không có wrapper
+            if (Array.isArray(response)) {
+                setReceipts(response);
+            } else if (response.data && Array.isArray(response.data)) {
+                setReceipts(response.data);
+            } else {
+                setReceipts([]);
+            }
+            
+            // Xử lý pagination nếu có
             if (response.pagination) {
                 setPagination(response.pagination);
             }
@@ -39,6 +48,7 @@ export const useReceipts = () => {
         } catch (err) {
             setError(err.message || 'Không thể tải danh sách biên lai');
             console.error('Error fetching receipts:', err);
+            setReceipts([]);
             throw err;
         } finally {
             setLoading(false);
