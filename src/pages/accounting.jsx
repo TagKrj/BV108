@@ -7,7 +7,7 @@ import { useReceipts } from '../hooks/useAccounting';
 
 const AccountingPage = () => {
     // Sử dụng custom hook để quản lý danh sách biên lai
-    const { receipts, loading, error, fetchReceipts } = useReceipts();
+    const { receipts, loading, error, fetchReceipts, createReceipt } = useReceipts();
 
     // State for receipt detail popup
     const [showDetailPopup, setShowDetailPopup] = useState(false);
@@ -21,16 +21,21 @@ const AccountingPage = () => {
     const [selectedRecord, setSelectedRecord] = useState(null);
     const [formData, setFormData] = useState({
         patientCode: '',
+        recordCode: '',
         recordType: '',
         notes: '',
         // Thêm trường dịch vụ
         serviceCode: '',
         quantity: '',
-        unitPrice: ''
+        unitPrice: '',
+        insuranceRate: ''
     });
 
     // State lưu trữ dịch vụ đã thêm
     const [services, setServices] = useState([]);
+
+    // State loading riêng cho form submit
+    const [submitting, setSubmitting] = useState(false);
 
     // Load danh sách biên lai khi component mount
     useEffect(() => {
@@ -78,11 +83,65 @@ const AccountingPage = () => {
         }
     };
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
-        console.log('Form submitted:', formData);
-        console.log('Services:', services);
-        // TODO: Call API to submit form
+
+        // Validate
+        if (!formData.recordCode) {
+            alert('Vui lòng nhập mã hồ sơ');
+            return;
+        }
+
+        if (!formData.recordType) {
+            alert('Vui lòng chọn loại hồ sơ');
+            return;
+        }
+
+        if (services.length === 0) {
+            alert('Vui lòng thêm ít nhất một dịch vụ');
+            return;
+        }
+
+        try {
+            setSubmitting(true);
+
+            // Chuẩn bị dữ liệu theo format BE
+            const receiptData = {
+                maHoSo: formData.recordCode,
+                loaiHoSo: formData.recordType === 'ngoai-tru' ? 1 : 2, // 1: Ngoại trú, 2: Nội trú
+                chiTiet: services.map(service => ({
+                    maDichVu: service.serviceCode,
+                    soLuong: parseFloat(service.quantity),
+                    donGia: parseFloat(service.unitPrice),
+                    tyLeBaoHiem: parseFloat(service.insuranceRate) || 0
+                })),
+                ghiChu: formData.notes
+            };
+
+            // Gọi API tạo biên lai
+            await createReceipt(receiptData);
+
+            alert('Lập biên lai thành công!');
+
+            // Reset form
+            setFormData({
+                patientCode: '',
+                recordCode: '',
+                recordType: '',
+                notes: '',
+                serviceCode: '',
+                quantity: '',
+                unitPrice: '',
+                insuranceRate: ''
+            });
+            setServices([]);
+
+        } catch (error) {
+            console.error('Error creating receipt:', error);
+            alert(error.message || 'Không thể lập biên lai. Vui lòng thử lại!');
+        } finally {
+            setSubmitting(false);
+        }
     };
 
     const handleInputChange = (e) => {
@@ -110,6 +169,7 @@ const AccountingPage = () => {
             serviceCode: formData.serviceCode,
             quantity: formData.quantity,
             unitPrice: formData.unitPrice,
+            insuranceRate: formData.insuranceRate || 0,
             amount
         };
 
@@ -120,7 +180,8 @@ const AccountingPage = () => {
             ...prev,
             serviceCode: '',
             quantity: '',
-            unitPrice: ''
+            unitPrice: '',
+            insuranceRate: ''
         }));
     };
 
@@ -191,18 +252,18 @@ const AccountingPage = () => {
                 <form onSubmit={handleSubmit} className="p-8">
                     <div className='flex justify-between gap-8'>
                         <div className="form-layout w-1/2">
-                            {/* Form Group 1 - Mã bệnh nhân */}
+                            {/* Form Group 1 - Mã hồ sơ */}
                             <div className="form-group mb-5">
                                 <label className="form-label block text-sm font-medium text-gray-700 mb-2">
-                                    Mã bệnh nhân
+                                    Mã hồ sơ <span className="text-red-500">*</span>
                                 </label>
                                 <div className="relative">
                                     <input
                                         type="text"
-                                        name="patientCode"
-                                        value={formData.patientCode}
+                                        name="recordCode"
+                                        value={formData.recordCode}
                                         onChange={handleInputChange}
-                                        placeholder="Nhập mã bệnh nhân"
+                                        placeholder="Nhập mã hồ sơ"
                                         className="w-full h-[43px] px-4 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2D5016] focus:border-transparent"
                                     />
                                 </div>
@@ -211,7 +272,7 @@ const AccountingPage = () => {
                             {/* Form Group 2 - Loại hồ sơ */}
                             <div className="form-group mb-5">
                                 <label className="form-label block text-sm font-medium text-gray-700 mb-2">
-                                    Loại hồ sơ
+                                    Loại hồ sơ <span className="text-red-500">*</span>
                                 </label>
                                 <div className="relative">
                                     <select
@@ -223,7 +284,6 @@ const AccountingPage = () => {
                                         <option value="">Chọn loại hồ sơ</option>
                                         <option value="ngoai-tru">Ngoại trú</option>
                                         <option value="noi-tru">Nội trú</option>
-                                        <option value="cap-cuu">Cấp cứu</option>
                                     </select>
                                     <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
                                         <svg width="12" height="6" viewBox="0 0 12 6" fill="none">
@@ -266,8 +326,8 @@ const AccountingPage = () => {
                                             name="serviceCode"
                                             value={formData.serviceCode}
                                             onChange={handleInputChange}
-                                            placeholder="Nhập mã dịch vụ"
-                                            className="w-[157px] h-[43px] px-4 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2D5016] focus:border-transparent bg-white"
+                                            placeholder="Nhập mã DV"
+                                            className="w-[120px] h-[43px] px-4 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2D5016] focus:border-transparent bg-white"
                                         />
                                     </div>
                                 </div>
@@ -275,15 +335,15 @@ const AccountingPage = () => {
                                 {/* Form Group - Số lượng */}
                                 <div className="form-group">
                                     <label className="form-label block text-sm font-medium text-gray-700 mb-2">
-                                        Số lượng <span className="text-red-500">*</span>
+                                        SL <span className="text-red-500">*</span>
                                     </label>
                                     <input
                                         type="number"
                                         name="quantity"
                                         value={formData.quantity}
                                         onChange={handleInputChange}
-                                        placeholder="Số lượng"
-                                        className="w-[78px] h-[43px] px-4 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2D5016] focus:border-transparent bg-white"
+                                        placeholder="SL"
+                                        className="w-[70px] h-[43px] px-4 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2D5016] focus:border-transparent bg-white"
                                     />
                                 </div>
 
@@ -298,7 +358,24 @@ const AccountingPage = () => {
                                         value={formData.unitPrice}
                                         onChange={handleInputChange}
                                         placeholder="Đơn giá"
-                                        className="w-[78px] h-[43px] px-4 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2D5016] focus:border-transparent bg-white"
+                                        className="w-[100px] h-[43px] px-4 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2D5016] focus:border-transparent bg-white"
+                                    />
+                                </div>
+
+                                {/* Form Group - Tỷ lệ BH */}
+                                <div className="form-group">
+                                    <label className="form-label block text-sm font-medium text-gray-700 mb-2">
+                                        TL BH (%)
+                                    </label>
+                                    <input
+                                        type="number"
+                                        name="insuranceRate"
+                                        value={formData.insuranceRate}
+                                        onChange={handleInputChange}
+                                        placeholder="0"
+                                        min="0"
+                                        max="100"
+                                        className="w-[80px] h-[43px] px-4 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2D5016] focus:border-transparent bg-white"
                                     />
                                 </div>
 
@@ -324,6 +401,7 @@ const AccountingPage = () => {
                                                 <th className="p-4 text-left text-xs font-semibold text-gray-500">DỊCH VỤ</th>
                                                 <th className="p-4 text-center text-xs font-semibold text-gray-500">SỐ LƯỢNG</th>
                                                 <th className="p-4 text-center text-xs font-semibold text-gray-500">ĐƠN GIÁ</th>
+                                                <th className="p-4 text-center text-xs font-semibold text-gray-500">TL BH (%)</th>
                                                 <th className="p-4 text-center text-xs font-semibold text-gray-500">THÀNH TIỀN</th>
                                                 <th className="p-4 text-center text-xs font-semibold text-gray-500"></th>
                                             </tr>
@@ -333,8 +411,9 @@ const AccountingPage = () => {
                                                 <tr key={service.id} className="border-t border-gray-100 bg-white">
                                                     <td className="p-4 text-sm text-gray-800">{service.serviceCode}</td>
                                                     <td className="p-4 text-sm text-gray-800 text-center">{service.quantity}</td>
-                                                    <td className="p-4 text-sm text-gray-800 text-center">{service.unitPrice} ₫</td>
-                                                    <td className="p-4 text-sm text-gray-800 text-center">{service.amount} ₫</td>
+                                                    <td className="p-4 text-sm text-gray-800 text-center">{parseFloat(service.unitPrice).toLocaleString()} ₫</td>
+                                                    <td className="p-4 text-sm text-gray-800 text-center">{service.insuranceRate || 0}%</td>
+                                                    <td className="p-4 text-sm text-gray-800 text-center font-bold">{service.amount.toLocaleString()} ₫</td>
                                                     <td className="p-4 text-center">
                                                         <button
                                                             type="button"
@@ -357,9 +436,17 @@ const AccountingPage = () => {
                     <div className="submit-section flex justify-center mt-10">
                         <button
                             type="submit"
-                            className="btn-primary h-[51px] px-12 bg-gradient-to-br from-[#2D5016] to-[#4A7C23] text-white font-bold text-base rounded-lg hover:shadow-xl hover:bg-[#3D6B1D] cursor-pointer transition-all duration-300 active:scale-95"
+                            disabled={submitting}
+                            className="btn-primary h-[51px] px-12 bg-gradient-to-br from-[#2D5016] to-[#4A7C23] text-white font-bold text-base rounded-lg hover:shadow-xl hover:bg-[#3D6B1D] cursor-pointer transition-all duration-300 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                            Lập biên lai viện phí
+                            {submitting ? (
+                                <>
+                                    <i className="fas fa-spinner fa-spin mr-2"></i>
+                                    Đang xử lý...
+                                </>
+                            ) : (
+                                'Lập biên lai viện phí'
+                            )}
                         </button>
                     </div>
                 </form>

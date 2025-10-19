@@ -3,208 +3,168 @@
  * Service xử lý các API liên quan đến kế toán viện phí
  */
 
-import apiClient from './apiClient';
+import apiClient from "./apiClient";
 
 const ACCOUNTING_ENDPOINTS = {
-    // Biên lai viện phí
-    RECEIPTS: '/now/v1/hospital-fee/bien-lai/tra-cuu',
-    RECEIPT_DETAIL: (id) => `/accounting/receipts/${id}`,
-    CREATE_RECEIPT: '/accounting/receipts',
-    UPDATE_RECEIPT: (id) => `/accounting/receipts/${id}`,
-    DELETE_RECEIPT: (id) => `/accounting/receipts/${id}`,
-    
-    // Tạm ứng
-    ADVANCE_PAYMENT: '/accounting/advance-payment',
-    ADVANCE_PAYMENT_DETAIL: (id) => `/accounting/advance-payment/${id}`,
-    
-    // Hoàn ứng
-    COMPLETE_PAYMENT: '/accounting/complete-payment',
-    COMPLETE_PAYMENT_DETAIL: (id) => `/accounting/complete-payment/${id}`,
-    
-    // Thanh toán ra viện
-    DISCHARGE_PAYMENT: '/accounting/discharge-payment',
-    DISCHARGE_PAYMENT_DETAIL: (id) => `/accounting/discharge-payment/${id}`,
-    
-    // Thông tin bệnh nhân
-    PATIENT_INFO: (patientCode) => `/patients/${patientCode}`,
-    
-    // Dịch vụ
-    SERVICES: '/services',
-    SERVICE_DETAIL: (serviceCode) => `/services/${serviceCode}`,
-    
-    // Báo cáo thống kê
-    STATISTICS: '/accounting/statistics',
-    REVENUE_REPORT: '/accounting/reports/revenue',
+  // Biên lai viện phí
+  RECEIPTS: "/hospital-fee/bien-lai/tra-cuu",
+  CREATE_RECEIPT: "/hospital-fee/bien-lai",
+  CANCEL_RECEIPT: (id) => `/hospital-fee/bien-lai/${id}/huy`,
+
+  // Tạm ứng
+  ADVANCE_PAYMENT: "/hospital-fee/tam-ung",
+
+  // Hoàn ứng
+  COMPLETE_PAYMENT: "/hospital-fee/tam-ung/hoan",
+
+  // Thanh toán ra viện
+  DISCHARGE_PAYMENT: "/hospital-fee/thanh-toan-ra-vien",
+
+  // Công nợ
+  DEBT: "/hospital-fee/cong-no",
+  DEBT_TRACKING: "/hospital-fee/cong-no/theo-doi",
+  DEBT_PAYMENT: "/hospital-fee/cong-no/thanh-toan",
+  DEBT_REPORT: "/hospital-fee/cong-no/bao-cao",
+
+  // Báo cáo
+  REVENUE_REPORT: "/hospital-fee/bao-cao/thu-chi",
 };
 
 class AccountingService {
-    /**
-     * Lấy danh sách biên lai viện phí
-     * @param {Object} params - Query parameters (page, limit, status, patientCode, dateFrom, dateTo)
-     * @returns {Promise} Response data
-     */
-    async getReceipts(params = {}) {
-        const queryString = new URLSearchParams(params).toString();
-        const endpoint = queryString 
-            ? `${ACCOUNTING_ENDPOINTS.RECEIPTS}?${queryString}`
-            : ACCOUNTING_ENDPOINTS.RECEIPTS;
-        
-        return await apiClient.get(endpoint);
-    }
+  /**
+   * Lấy danh sách biên lai viện phí (UC3: Tra cứu biên lai)
+   * @param {Object} params - Query parameters (maBenhNhan, maVienPhi, tuNgay, denNgay)
+   * @returns {Promise} Response data
+   */
+  async getReceipts(params = {}) {
+    const queryString = new URLSearchParams(params).toString();
+    const endpoint = queryString
+      ? `${ACCOUNTING_ENDPOINTS.RECEIPTS}?${queryString}`
+      : ACCOUNTING_ENDPOINTS.RECEIPTS;
 
-    /**
-     * Lấy chi tiết biên lai theo ID
-     * @param {string} receiptId - ID của biên lai
-     * @returns {Promise} Receipt detail
-     */
-    async getReceiptDetail(receiptId) {
-        return await apiClient.get(ACCOUNTING_ENDPOINTS.RECEIPT_DETAIL(receiptId));
-    }
+    return await apiClient.get(endpoint);
+  }
 
-    /**
-     * Tạo biên lai viện phí mới
-     * @param {Object} receiptData - Dữ liệu biên lai
-     * @returns {Promise} Created receipt
-     */
-    async createReceipt(receiptData) {
-        return await apiClient.post(ACCOUNTING_ENDPOINTS.CREATE_RECEIPT, receiptData);
-    }
+  /**
+   * Lập biên lai viện phí (UC1-2: Lập biên lai)
+   * @param {Object} receiptData - Dữ liệu biên lai {maHoSo, loaiHoSo, chiTiet[], ghiChu}
+   * @returns {Promise} Created receipt
+   */
+  async createReceipt(receiptData) {
+    return await apiClient.post(
+      ACCOUNTING_ENDPOINTS.CREATE_RECEIPT,
+      receiptData
+    );
+  }
 
-    /**
-     * Cập nhật biên lai viện phí
-     * @param {string} receiptId - ID của biên lai
-     * @param {Object} receiptData - Dữ liệu cập nhật
-     * @returns {Promise} Updated receipt
-     */
-    async updateReceipt(receiptId, receiptData) {
-        return await apiClient.put(
-            ACCOUNTING_ENDPOINTS.UPDATE_RECEIPT(receiptId), 
-            receiptData
-        );
-    }
+  /**
+   * Hủy/Hoàn biên lai (UC4: Hủy biên lai)
+   * @param {string} receiptId - ID của biên lai
+   * @param {string} reason - Lý do hủy
+   * @returns {Promise} Cancel result
+   */
+  async cancelReceipt(receiptId, reason) {
+    return await apiClient.post(
+      ACCOUNTING_ENDPOINTS.CANCEL_RECEIPT(receiptId),
+      { lyDo: reason }
+    );
+  }
 
-    /**
-     * Xóa biên lai viện phí
-     * @param {string} receiptId - ID của biên lai
-     * @returns {Promise} Delete result
-     */
-    async deleteReceipt(receiptId) {
-        return await apiClient.delete(ACCOUNTING_ENDPOINTS.DELETE_RECEIPT(receiptId));
-    }
+  /**
+   * Tạo phiếu tạm ứng (UC5-6-7: Thu tạm ứng)
+   * @param {Object} advanceData - Dữ liệu tạm ứng {maBenhNhan, loaiTamUng, soTien, maHoSo?, ghiChu?}
+   * @returns {Promise} Created advance payment
+   */
+  async createAdvancePayment(advanceData) {
+    return await apiClient.post(
+      ACCOUNTING_ENDPOINTS.ADVANCE_PAYMENT,
+      advanceData
+    );
+  }
 
-    /**
-     * Tạo phiếu tạm ứng
-     * @param {Object} advanceData - Dữ liệu tạm ứng
-     * @returns {Promise} Created advance payment
-     */
-    async createAdvancePayment(advanceData) {
-        return await apiClient.post(ACCOUNTING_ENDPOINTS.ADVANCE_PAYMENT, advanceData);
-    }
+  /**
+   * Tạo phiếu hoàn ứng (UC8: Hoàn ứng)
+   * @param {Object} completeData - Dữ liệu hoàn ứng {maTamUng, soTienHoan, ghiChu?}
+   * @returns {Promise} Created complete payment
+   */
+  async createCompletePayment(completeData) {
+    return await apiClient.post(
+      ACCOUNTING_ENDPOINTS.COMPLETE_PAYMENT,
+      completeData
+    );
+  }
 
-    /**
-     * Lấy chi tiết tạm ứng
-     * @param {string} advanceId - ID của phiếu tạm ứng
-     * @returns {Promise} Advance payment detail
-     */
-    async getAdvancePaymentDetail(advanceId) {
-        return await apiClient.get(ACCOUNTING_ENDPOINTS.ADVANCE_PAYMENT_DETAIL(advanceId));
-    }
+  /**
+   * Tạo phiếu thanh toán ra viện (UC9-12: Thanh toán ra viện)
+   * @param {Object} dischargeData - Dữ liệu thanh toán {maHoSo, danhSachTamUng[], tienMienGiam?, lyDoMienGiam?, ghiChu?}
+   * @returns {Promise} Created discharge payment
+   */
+  async createDischargePayment(dischargeData) {
+    return await apiClient.post(
+      ACCOUNTING_ENDPOINTS.DISCHARGE_PAYMENT,
+      dischargeData
+    );
+  }
 
-    /**
-     * Tạo phiếu hoàn ứng
-     * @param {Object} completeData - Dữ liệu hoàn ứng
-     * @returns {Promise} Created complete payment
-     */
-    async createCompletePayment(completeData) {
-        return await apiClient.post(ACCOUNTING_ENDPOINTS.COMPLETE_PAYMENT, completeData);
-    }
+  /**
+   * Ghi nhận công nợ (UC13: Ghi nhận công nợ)
+   * @param {Object} debtData - Dữ liệu công nợ {maBenhNhan, maVienPhi, soTienNo, ngayHetHan, ghiChu?}
+   * @returns {Promise} Created debt
+   */
+  async createDebt(debtData) {
+    return await apiClient.post(ACCOUNTING_ENDPOINTS.DEBT, debtData);
+  }
 
-    /**
-     * Lấy chi tiết hoàn ứng
-     * @param {string} completeId - ID của phiếu hoàn ứng
-     * @returns {Promise} Complete payment detail
-     */
-    async getCompletePaymentDetail(completeId) {
-        return await apiClient.get(ACCOUNTING_ENDPOINTS.COMPLETE_PAYMENT_DETAIL(completeId));
-    }
+  /**
+   * Theo dõi công nợ (UC14: Theo dõi công nợ)
+   * @param {Object} params - Query parameters (maBenhNhan?, trangThai?)
+   * @returns {Promise} Debt tracking list
+   */
+  async getDebtTracking(params = {}) {
+    const queryString = new URLSearchParams(params).toString();
+    const endpoint = queryString
+      ? `${ACCOUNTING_ENDPOINTS.DEBT_TRACKING}?${queryString}`
+      : ACCOUNTING_ENDPOINTS.DEBT_TRACKING;
 
-    /**
-     * Tạo phiếu thanh toán ra viện
-     * @param {Object} dischargeData - Dữ liệu thanh toán ra viện
-     * @returns {Promise} Created discharge payment
-     */
-    async createDischargePayment(dischargeData) {
-        return await apiClient.post(ACCOUNTING_ENDPOINTS.DISCHARGE_PAYMENT, dischargeData);
-    }
+    return await apiClient.get(endpoint);
+  }
 
-    /**
-     * Lấy chi tiết thanh toán ra viện
-     * @param {string} dischargeId - ID của phiếu thanh toán ra viện
-     * @returns {Promise} Discharge payment detail
-     */
-    async getDischargePaymentDetail(dischargeId) {
-        return await apiClient.get(ACCOUNTING_ENDPOINTS.DISCHARGE_PAYMENT_DETAIL(dischargeId));
-    }
+  /**
+   * Thanh toán nợ (UC15: Thanh toán nợ)
+   * @param {Object} paymentData - Dữ liệu thanh toán {maCongNo, soTienTra, ghiChu?}
+   * @returns {Promise} Payment result
+   */
+  async payDebt(paymentData) {
+    return await apiClient.post(ACCOUNTING_ENDPOINTS.DEBT_PAYMENT, paymentData);
+  }
 
-    /**
-     * Lấy thông tin bệnh nhân theo mã
-     * @param {string} patientCode - Mã bệnh nhân
-     * @returns {Promise} Patient information
-     */
-    async getPatientInfo(patientCode) {
-        return await apiClient.get(ACCOUNTING_ENDPOINTS.PATIENT_INFO(patientCode));
-    }
+  /**
+   * Báo cáo công nợ (UC16: Báo cáo công nợ)
+   * @param {Object} params - Query parameters (tuNgay, denNgay)
+   * @returns {Promise} Debt report
+   */
+  async getDebtReport(params = {}) {
+    const queryString = new URLSearchParams(params).toString();
+    const endpoint = queryString
+      ? `${ACCOUNTING_ENDPOINTS.DEBT_REPORT}?${queryString}`
+      : ACCOUNTING_ENDPOINTS.DEBT_REPORT;
 
-    /**
-     * Lấy danh sách dịch vụ
-     * @param {Object} params - Query parameters
-     * @returns {Promise} Services list
-     */
-    async getServices(params = {}) {
-        const queryString = new URLSearchParams(params).toString();
-        const endpoint = queryString 
-            ? `${ACCOUNTING_ENDPOINTS.SERVICES}?${queryString}`
-            : ACCOUNTING_ENDPOINTS.SERVICES;
-        
-        return await apiClient.get(endpoint);
-    }
+    return await apiClient.get(endpoint);
+  }
 
-    /**
-     * Lấy chi tiết dịch vụ theo mã
-     * @param {string} serviceCode - Mã dịch vụ
-     * @returns {Promise} Service detail
-     */
-    async getServiceDetail(serviceCode) {
-        return await apiClient.get(ACCOUNTING_ENDPOINTS.SERVICE_DETAIL(serviceCode));
-    }
+  /**
+   * Báo cáo thu chi (UC21: Báo cáo thu chi)
+   * @param {Object} params - Query parameters (tuNgay, denNgay, maKhoa?)
+   * @returns {Promise} Revenue report
+   */
+  async getRevenueReport(params = {}) {
+    const queryString = new URLSearchParams(params).toString();
+    const endpoint = queryString
+      ? `${ACCOUNTING_ENDPOINTS.REVENUE_REPORT}?${queryString}`
+      : ACCOUNTING_ENDPOINTS.REVENUE_REPORT;
 
-    /**
-     * Lấy thống kê kế toán
-     * @param {Object} params - Query parameters (dateFrom, dateTo)
-     * @returns {Promise} Statistics data
-     */
-    async getStatistics(params = {}) {
-        const queryString = new URLSearchParams(params).toString();
-        const endpoint = queryString 
-            ? `${ACCOUNTING_ENDPOINTS.STATISTICS}?${queryString}`
-            : ACCOUNTING_ENDPOINTS.STATISTICS;
-        
-        return await apiClient.get(endpoint);
-    }
-
-    /**
-     * Lấy báo cáo doanh thu
-     * @param {Object} params - Query parameters (dateFrom, dateTo, groupBy)
-     * @returns {Promise} Revenue report
-     */
-    async getRevenueReport(params = {}) {
-        const queryString = new URLSearchParams(params).toString();
-        const endpoint = queryString 
-            ? `${ACCOUNTING_ENDPOINTS.REVENUE_REPORT}?${queryString}`
-            : ACCOUNTING_ENDPOINTS.REVENUE_REPORT;
-        
-        return await apiClient.get(endpoint);
-    }
+    return await apiClient.get(endpoint);
+  }
 }
 
 // Export singleton instance

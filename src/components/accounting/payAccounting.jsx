@@ -1,10 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
+import { useDischargePayment } from '../../hooks/useAccounting';
 
 const PayAccountingPopup = ({ isOpen, onClose, recordData }) => {
+    const { createDischargePayment, loading } = useDischargePayment();
+    const [isSubmitting, setIsSubmitting] = useState(false); // Prevent double submit
+
     // Form states
     const [formData, setFormData] = useState({
         recordCode: recordData?.recordCode || 'HS001',
+        advanceCodes: '', // Danh sách mã tạm ứng (ngăn cách bằng dấu phẩy)
         discount: 0,
         discountReason: '',
         notes: ''
@@ -46,7 +51,11 @@ const PayAccountingPopup = ({ isOpen, onClose, recordData }) => {
                 recordCode: recordData.recordCode
             }));
         }
-    }, [recordData]);
+        // Reset submitting state when popup opens
+        if (isOpen) {
+            setIsSubmitting(false);
+        }
+    }, [recordData, isOpen]);
 
     // Handle form input changes
     const handleChange = (e) => {
@@ -78,10 +87,45 @@ const PayAccountingPopup = ({ isOpen, onClose, recordData }) => {
     };
 
     // Handle form submission
-    const handleSubmit = () => {
-        if (validateForm()) {
-            console.log('Thanh toán ra viện submitted:', formData);
+    const handleSubmit = async (e) => {
+        if (e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        // Prevent double submission
+        if (isSubmitting || loading) {
+            console.log('Already submitting, ignoring duplicate click');
+            return;
+        }
+
+        if (!validateForm()) {
+            return;
+        }
+
+        try {
+            setIsSubmitting(true);
+
+            // Chuẩn bị dữ liệu theo format BE
+            const dischargeData = {
+                maHoSo: formData.recordCode,
+                danhSachTamUng: formData.advanceCodes
+                    ? formData.advanceCodes.split(',').map(code => code.trim()).filter(code => code)
+                    : [],
+                tienMienGiam: parseFloat(formData.discount) || 0,
+                lyDoMienGiam: formData.discountReason,
+                ghiChu: formData.notes
+            };
+
+            await createDischargePayment(dischargeData);
+
+            alert('Thanh toán ra viện thành công!');
             onClose();
+        } catch (error) {
+            console.error('Error creating discharge payment:', error);
+            alert(error.message || 'Không thể thanh toán ra viện. Vui lòng thử lại!');
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
@@ -158,6 +202,40 @@ const PayAccountingPopup = ({ isOpen, onClose, recordData }) => {
                     </div>
 
                     <form className="space-y-6">
+                        {/* Mã hồ sơ */}
+                        <div className="form-group">
+                            <label className="block text-sm font-semibold text-gray-700 mb-1.5">
+                                Mã hồ sơ
+                            </label>
+                            <div className="relative">
+                                <input
+                                    type="text"
+                                    name="recordCode"
+                                    value={formData.recordCode}
+                                    readOnly
+                                    className="w-full p-3 bg-[#F9FAFB] border border-gray-200 rounded-lg text-gray-500 focus:outline-none"
+                                />
+                            </div>
+                        </div>
+
+                        {/* Danh sách mã tạm ứng */}
+                        <div className="form-group">
+                            <label className="block text-sm font-semibold text-gray-700 mb-1.5">
+                                Mã tạm ứng (ngăn cách bởi dấu phẩy)
+                            </label>
+                            <div className="relative">
+                                <input
+                                    type="text"
+                                    name="advanceCodes"
+                                    value={formData.advanceCodes}
+                                    onChange={handleChange}
+                                    placeholder="VD: TU001, TU002, TU003"
+                                    className="w-full p-3 bg-[#F9FAFB] border border-gray-200 rounded-lg text-gray-700 focus:outline-none focus:border-[#F59E0B]"
+                                />
+                            </div>
+                            <p className="text-xs text-gray-500 mt-1">Nhập các mã tạm ứng cần khấu trừ, ngăn cách bởi dấu phẩy</p>
+                        </div>
+
                         {/* Số tiền miễn giảm */}
                         <div className="form-group">
                             <div className="flex items-center mb-1.5">
@@ -223,10 +301,20 @@ const PayAccountingPopup = ({ isOpen, onClose, recordData }) => {
                     <button
                         type="button"
                         onClick={handleSubmit}
-                        className="bg-gradient-to-br from-[#F59E0B] to-[#D97706] text-white px-5 py-2.5 rounded-lg font-semibold flex items-center gap-2 opacity-90 hover:opacity-100 transition-opacity"
+                        disabled={loading || isSubmitting}
+                        className="bg-gradient-to-br from-[#F59E0B] to-[#D97706] text-white px-5 py-2.5 rounded-lg font-semibold flex items-center gap-2 opacity-90 hover:opacity-100 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                        <i className="fas fa-check-circle"></i>
-                        <span>Xác nhận thanh toán</span>
+                        {(loading || isSubmitting) ? (
+                            <>
+                                <i className="fas fa-spinner fa-spin"></i>
+                                <span>Đang xử lý...</span>
+                            </>
+                        ) : (
+                            <>
+                                <i className="fas fa-check-circle"></i>
+                                <span>Xác nhận thanh toán</span>
+                            </>
+                        )}
                     </button>
                 </div>
             </div>

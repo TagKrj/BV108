@@ -1,20 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
-// Sử dụng đường dẫn tuyệt đối thay vì tương đối để tránh lỗi
-// Không cần import trực tiếp các SVG vì chúng ta sẽ sử dụng FontAwesome icons
+import { useCompletePayment } from '../../hooks/useAccounting';
 
 const CompleteAccountingPopup = ({ isOpen, onClose, recordData }) => {
+    const { createCompletePayment, loading } = useCompletePayment();
     // Form states
     const [formData, setFormData] = useState({
         recordCode: recordData?.recordCode || 'HS001',
-        advanceType: '',
+        advanceCode: '', // Thêm mã tạm ứng
         amount: 0,
         notes: ''
     });
 
     // Error states
     const [errors, setErrors] = useState({
-        advanceType: false,
+        advanceCode: false,
         amount: false
     });
 
@@ -55,7 +55,7 @@ const CompleteAccountingPopup = ({ isOpen, onClose, recordData }) => {
     // Validate form before submission
     const validateForm = () => {
         const newErrors = {
-            advanceType: !formData.advanceType,
+            advanceCode: !formData.advanceCode,
             amount: formData.amount <= 0
         };
 
@@ -66,10 +66,26 @@ const CompleteAccountingPopup = ({ isOpen, onClose, recordData }) => {
     };
 
     // Handle form submission
-    const handleSubmit = () => {
-        if (validateForm()) {
-            console.log('Hoàn ứng submitted:', formData);
+    const handleSubmit = async () => {
+        if (!validateForm()) {
+            return;
+        }
+
+        try {
+            // Chuẩn bị dữ liệu theo format BE
+            const completeData = {
+                maTamUng: formData.advanceCode,
+                soTienHoan: parseFloat(formData.amount),
+                ghiChu: formData.notes
+            };
+
+            await createCompletePayment(completeData);
+
+            alert('Hoàn ứng thành công!');
             onClose();
+        } catch (error) {
+            console.error('Error creating complete payment:', error);
+            alert(error.message || 'Không thể hoàn ứng. Vui lòng thử lại!');
         }
     };
 
@@ -125,8 +141,33 @@ const CompleteAccountingPopup = ({ isOpen, onClose, recordData }) => {
                             </div>
                         </div>
 
+                        {/* Mã tạm ứng */}
+                        <div className="form-group">
+                            <div className="flex items-center mb-1.5">
+                                <label className="block text-sm font-semibold text-gray-700">
+                                    Mã tạm ứng
+                                </label>
+                                <span className="text-red-500 font-bold ml-1">*</span>
+                            </div>
+                            <div className="relative">
+                                <input
+                                    type="text"
+                                    name="advanceCode"
+                                    value={formData.advanceCode}
+                                    onChange={handleChange}
+                                    placeholder="Nhập mã tạm ứng"
+                                    className={`w-full p-3 bg-[#F9FAFB] border ${errors.advanceCode ? 'border-red-500' : 'border-gray-200'} rounded-lg text-gray-700 focus:outline-none focus:border-[#2D5016]`}
+                                />
+                            </div>
+                            {errors.advanceCode && (
+                                <div className="error-message flex items-center mt-1.5 text-red-500">
+                                    <i className="fas fa-exclamation-circle text-xs mr-1.5"></i>
+                                    <span className="text-xs">Vui lòng nhập mã tạm ứng</span>
+                                </div>
+                            )}
+                        </div>
 
-                        {/* Số tiền hạm ứng */}
+                        {/* Số tiền hoàn ứng */}
                         <div className="form-group">
                             <div className="flex items-center mb-1.5">
                                 <label className="block text-sm font-semibold text-gray-700">
@@ -198,10 +239,20 @@ const CompleteAccountingPopup = ({ isOpen, onClose, recordData }) => {
                     <button
                         type="button"
                         onClick={handleSubmit}
-                        className="bg-gradient-to-br from-[#2D5016] to-[#4A7C23] text-white px-5 py-2.5 rounded-lg font-semibold flex items-center gap-2 opacity-90 hover:opacity-100 transition-opacity"
+                        disabled={loading}
+                        className="bg-gradient-to-br from-[#2D5016] to-[#4A7C23] text-white px-5 py-2.5 rounded-lg font-semibold flex items-center gap-2 opacity-90 hover:opacity-100 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                        <i className="fas fa-check-circle"></i>
-                        <span>Hoàn ứng viện phí</span>
+                        {loading ? (
+                            <>
+                                <i className="fas fa-spinner fa-spin"></i>
+                                <span>Đang xử lý...</span>
+                            </>
+                        ) : (
+                            <>
+                                <i className="fas fa-check-circle"></i>
+                                <span>Hoàn ứng viện phí</span>
+                            </>
+                        )}
                     </button>
                 </div>
             </div>

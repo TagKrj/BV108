@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
-// Sử dụng đường dẫn tuyệt đối thay vì tương đối để tránh lỗi
-// Không cần import trực tiếp các SVG vì chúng ta sẽ sử dụng FontAwesome icons
+import { useAdvancePayment } from '../../hooks/useAccounting';
 
 const AdvanceAccountingPopup = ({ isOpen, onClose, recordData }) => {
+    const { createAdvancePayment, loading } = useAdvancePayment();
     // Form states
     const [formData, setFormData] = useState({
         recordCode: recordData?.recordCode || 'HS001',
@@ -66,10 +66,30 @@ const AdvanceAccountingPopup = ({ isOpen, onClose, recordData }) => {
     };
 
     // Handle form submission
-    const handleSubmit = () => {
-        if (validateForm()) {
-            console.log('Tạm ứng submitted:', formData);
+    const handleSubmit = async () => {
+        if (!validateForm()) {
+            return;
+        }
+
+        try {
+            // Chuẩn bị dữ liệu theo format BE
+            const advanceData = {
+                maBenhNhan: 'BN001', // TODO: Lấy từ recordData hoặc form
+                maHoSo: formData.recordCode,
+                loaiTamUng: formData.advanceType === 'examination' ? 1 :
+                    formData.advanceType === 'treatment' ? 2 :
+                        formData.advanceType === 'surgery' ? 2 : 3, // 1: Ngoại trú, 2: Nội trú, 3: Ứng trước
+                soTien: parseFloat(formData.amount),
+                ghiChu: formData.notes
+            };
+
+            await createAdvancePayment(advanceData);
+
+            alert('Tạo phiếu tạm ứng thành công!');
             onClose();
+        } catch (error) {
+            console.error('Error creating advance payment:', error);
+            alert(error.message || 'Không thể tạo phiếu tạm ứng. Vui lòng thử lại!');
         }
     };
 
@@ -230,10 +250,20 @@ const AdvanceAccountingPopup = ({ isOpen, onClose, recordData }) => {
                     <button
                         type="button"
                         onClick={handleSubmit}
-                        className="bg-gradient-to-br from-[#2D5016] to-[#4A7C23] text-white px-5 py-2.5 rounded-lg font-semibold flex items-center gap-2 opacity-90 hover:opacity-100 transition-opacity"
+                        disabled={loading}
+                        className="bg-gradient-to-br from-[#2D5016] to-[#4A7C23] text-white px-5 py-2.5 rounded-lg font-semibold flex items-center gap-2 opacity-90 hover:opacity-100 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                        <i className="fas fa-check-circle"></i>
-                        <span>Xác nhận tạm ứng</span>
+                        {loading ? (
+                            <>
+                                <i className="fas fa-spinner fa-spin"></i>
+                                <span>Đang xử lý...</span>
+                            </>
+                        ) : (
+                            <>
+                                <i className="fas fa-check-circle"></i>
+                                <span>Xác nhận tạm ứng</span>
+                            </>
+                        )}
                     </button>
                 </div>
             </div>
