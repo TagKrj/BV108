@@ -93,7 +93,7 @@ const Login = () => {
                                     <span className="text-5xl font-semibold text-[#1A2F0C]">108</span>
                                 </div>
                                 <h1 className="text-3xl font-semibold text-white mt-4 tracking-widest">BỆNH VIỆN QUÂN Y 108</h1>
-                                <p className="text-lg text-[#A7D68A] mt-4">Hệ thống Quản lý Tài chính</p>
+                                <p className="text-lg text-[#A7D68A] mt-4">Hệ thống Quản lý Viện phí</p>
                             </div>
                         </div>
 

@@ -39,7 +39,7 @@ const Sidebar = ({ activeItem, onMenuClick }) => {
 
                 {/* Subtitle */}
                 <div className="hospital-subtitle text-center opacity-80">
-                    <p className="text-[#A7D68A] text-xs">Hệ thống Quản lý Tài chính</p>
+                    <p className="text-[#A7D68A] text-xs">Hệ thống Quản lý Viện phí</p>
                 </div>
 
                 {/* Divider */}
