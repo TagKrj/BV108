@@ -227,7 +227,7 @@ const AdvanceAccountingPopup = ({ isOpen, onClose, recordData, onSuccess }) => {
                     </form>
 
                     {/* Preview Box */}
-                    <div className="mt-6 p-5 bg-red-50 border border-red-200 rounded-lg">
+                    {/* <div className="mt-6 p-5 bg-red-50 border border-red-200 rounded-lg">
                         <div className="flex items-center gap-2 text-red-600 font-bold mb-4">
                             <i className="fas fa-exclamation-triangle text-sm"></i>
                             <span>Số tiền không hợp lệ</span>
@@ -247,7 +247,7 @@ const AdvanceAccountingPopup = ({ isOpen, onClose, recordData, onSuccess }) => {
                                 </span>
                             </div>
                         </div>
-                    </div>
+                    </div> */}
                 </div>
 
                 {/* Modal Footer */}

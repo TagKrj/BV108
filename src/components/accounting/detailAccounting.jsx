@@ -1,5 +1,6 @@
 import React from 'react';
 import PropTypes from 'prop-types';
+import ExcelJS from 'exceljs';
 
 const DetailAccountingPopup = ({ isOpen, onClose, receiptData, onAdvanceClick, onCompleteClick, onPaymentClick, onCancelClick }) => {
     if (!isOpen) return null;
@@ -36,6 +37,614 @@ const DetailAccountingPopup = ({ isOpen, onClose, receiptData, onAdvanceClick, o
         }
     };
 
+    // Handler for export to Excel with ExcelJS
+    const handleExportExcel = async () => {
+        if (!receiptData) return;
+
+        try {
+            // Tính toán các giá trị
+            const tongTien = parseFloat(receiptData.tongTien || 0);
+            const tienBaoHiem = parseFloat(receiptData.tienBaoHiem || 0);
+            const tongTamUng = receiptData.tamUngs?.reduce((sum, tu) => {
+                if (tu.loaiTamUng === 3 && tu.trangThai === 3) return sum;
+                return sum + parseFloat(tu.soTien || 0);
+            }, 0) || 0;
+            const tongHoanUng = parseFloat(receiptData.tongTienHoanUng || 0);
+            const conPhaiTra = tongTien - tienBaoHiem - tongTamUng + tongHoanUng;
+
+            // Tạo workbook với ExcelJS
+            const workbook = new ExcelJS.Workbook();
+            workbook.creator = 'Hospital Management System';
+            workbook.created = new Date();
+
+            // ========== SHEET 1: TỔNG HỢP ==========
+            const sheet1 = workbook.addWorksheet('Tổng hợp', {
+                views: [{ showGridLines: false }]
+            });
+
+            sheet1.columns = [{ width: 28 }, { width: 28 }, { width: 12 }];
+
+            // Title
+            sheet1.mergeCells('A1:C1');
+            const titleCell = sheet1.getCell('A1');
+            titleCell.value = 'BIÊN LAI VIỆN PHÍ';
+            titleCell.font = { bold: true, size: 18, color: { argb: 'FF2D5016' } };
+            titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+            sheet1.getRow(1).height = 30;
+
+            sheet1.getRow(2).height = 8;
+
+            // Section 1: Thông tin biên lai
+            const infoHeaderCell = sheet1.getCell('A3');
+            infoHeaderCell.value = 'Mã biên lai:';
+            infoHeaderCell.font = { bold: true, size: 11, color: { argb: 'FF2D5016' } };
+            infoHeaderCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE8F5E9' } };
+            sheet1.getCell('B3').value = receiptData.code || 'VP2025000008';
+
+            sheet1.getCell('A4').value = 'Mã hồ sơ:';
+            sheet1.getCell('B4').value = receiptData.recordCode || 'HS001';
+
+            sheet1.getCell('A5').value = 'Ngày tạo:';
+            sheet1.getCell('B5').value = receiptData.createdDate || '07/10/2025 - 16:18';
+
+            sheet1.getCell('A6').value = 'Người thu:';
+            sheet1.getCell('B6').value = receiptData.collector || 'admin';
+
+            sheet1.getCell('A7').value = 'Trạng thái:';
+            sheet1.getCell('B7').value = receiptData.status === 'cancelled' ? 'ĐÃ HỦY' : receiptData.status === 'paid' ? 'ĐÃ THANH TOÁN' : 'CHƯA THANH TOÁN';
+
+            sheet1.getRow(8).height = 8;
+
+            // Section 2: Thông tin thanh toán
+            const paymentHeaderCell = sheet1.getCell('A9');
+            paymentHeaderCell.value = 'THÔNG TIN THANH TOÁN';
+            paymentHeaderCell.font = { bold: true, size: 11, color: { argb: 'FF2D5016' } };
+            paymentHeaderCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE8F5E9' } };
+
+            sheet1.getRow(10).height = 8;
+
+            const paymentData = [
+                ['Tổng tiền:', tongTien, 'VNĐ'],
+                ['Tỷ lệ bảo hiểm chi trả:', receiptData.insuranceRate || '0%', ''],
+                ['Tiền bảo hiểm:', tienBaoHiem, 'VNĐ'],
+                ['Đã tạm ứng:', tongTamUng, 'VNĐ'],
+                ['Đã hoàn ứng:', tongHoanUng, 'VNĐ'],
+                ['Tiền BN phải trả:', tongTien - tienBaoHiem, 'VNĐ'],
+                ['Còn phải trả:', Math.abs(conPhaiTra), 'VNĐ']
+            ];
+
+            paymentData.forEach((row, index) => {
+                const rowNum = 11 + index;
+                sheet1.getCell(`A${rowNum}`).value = row[0];
+                sheet1.getCell(`B${rowNum}`).value = row[1];
+                if (typeof row[1] === 'number') {
+                    sheet1.getCell(`B${rowNum}`).numFmt = '#,##0';
+                }
+                sheet1.getCell(`C${rowNum}`).value = row[2];
+            });
+
+            sheet1.getRow(18).height = 8;
+            sheet1.getCell('A19').value = 'Ghi chú:';
+            sheet1.getCell('B19').value = receiptData.note || 'Khám tổng quát';
+
+            // ========== SHEET 2: CHI TIẾT DỊCH VỤ ==========
+            const sheet2 = workbook.addWorksheet('Chi tiết dịch vụ');
+            sheet2.columns = [
+                { width: 20 },
+                { width: 12 },
+                { width: 18 },
+                { width: 20 },
+                { width: 22 }
+            ];
+
+            // Header
+            const header2 = sheet2.getRow(1);
+            header2.values = ['MÃ DỊCH VỤ', 'SỐ LƯỢNG', 'ĐƠN GIÁ (VNĐ)', 'THÀNH TIỀN (VNĐ)', 'TIỀN BẢO HIỂM (VNĐ)'];
+            header2.height = 25;
+            header2.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11 };
+            header2.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2D5016' } };
+            header2.alignment = { horizontal: 'center', vertical: 'middle' };
+            header2.eachCell(cell => {
+                cell.border = {
+                    top: { style: 'thin' },
+                    left: { style: 'thin' },
+                    bottom: { style: 'thin' },
+                    right: { style: 'thin' }
+                };
+            });
+
+            // Data rows
+            let rowIndex = 2;
+            if (receiptData.services?.length > 0) {
+                receiptData.services.forEach(service => {
+                    const row = sheet2.getRow(rowIndex);
+                    row.values = [
+                        service.code,
+                        service.quantity,
+                        service.unitPrice || 0,
+                        service.amount || 0,
+                        service.insuranceAmount || 0
+                    ];
+
+                    row.eachCell((cell, colNumber) => {
+                        cell.border = {
+                            top: { style: 'thin' },
+                            left: { style: 'thin' },
+                            bottom: { style: 'thin' },
+                            right: { style: 'thin' }
+                        };
+                        cell.alignment = { vertical: 'middle' };
+
+                        if (colNumber >= 3 && colNumber <= 5) {
+                            cell.numFmt = '#,##0';
+                            cell.alignment = { ...cell.alignment, horizontal: 'right' };
+                        }
+                    });
+
+                    rowIndex++;
+                });
+            } else {
+                const row = sheet2.getRow(rowIndex);
+                row.values = ['Không có dữ liệu', '', '', '', ''];
+                row.eachCell(cell => {
+                    cell.border = {
+                        top: { style: 'thin' },
+                        left: { style: 'thin' },
+                        bottom: { style: 'thin' },
+                        right: { style: 'thin' }
+                    };
+                });
+                rowIndex++;
+            }
+
+            // Total row
+            const totalRow2 = sheet2.getRow(rowIndex);
+            totalRow2.values = ['TỔNG CỘNG:', '', '', tongTien, tienBaoHiem];
+            totalRow2.font = { bold: true, size: 11 };
+            totalRow2.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE8F5E9' } };
+            totalRow2.eachCell((cell, colNumber) => {
+                cell.border = {
+                    top: { style: 'thin' },
+                    left: { style: 'thin' },
+                    bottom: { style: 'thin' },
+                    right: { style: 'thin' }
+                };
+                cell.alignment = { vertical: 'middle' };
+
+                if (colNumber === 4 || colNumber === 5) {
+                    cell.numFmt = '#,##0';
+                    cell.alignment = { ...cell.alignment, horizontal: 'right' };
+                }
+            });
+
+            // ========== SHEET 3: CHI TIẾT TẠM ỨNG ==========
+            const sheet3 = workbook.addWorksheet('Chi tiết tạm ứng');
+            sheet3.columns = [
+                { width: 8 },
+                { width: 22 },
+                { width: 18 },
+                { width: 20 },
+                { width: 38 }
+            ];
+
+            // Header
+            const header3 = sheet3.getRow(1);
+            header3.values = ['STT', 'MÃ TẠM ỨNG', 'NGÀY TẠM ỨNG', 'SỐ TIỀN (VNĐ)', 'GHI CHÚ'];
+            header3.height = 25;
+            header3.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11 };
+            header3.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2D5016' } };
+            header3.alignment = { horizontal: 'center', vertical: 'middle' };
+            header3.eachCell(cell => {
+                cell.border = {
+                    top: { style: 'thin' },
+                    left: { style: 'thin' },
+                    bottom: { style: 'thin' },
+                    right: { style: 'thin' }
+                };
+            });
+
+            // Data
+            const tamUngFiltered = receiptData.tamUngs?.filter(tu => !(tu.loaiTamUng === 3 && tu.trangThai === 3)) || [];
+
+            let rowIndex3 = 2;
+            if (tamUngFiltered.length > 0) {
+                tamUngFiltered.forEach((tu, index) => {
+                    const row = sheet3.getRow(rowIndex3);
+                    row.values = [
+                        index + 1,
+                        tu.maTamUng,
+                        new Date(tu.ngayTamUng).toLocaleDateString('vi-VN'),
+                        parseFloat(tu.soTien) || 0,
+                        tu.ghiChu || ''
+                    ];
+
+                    row.eachCell((cell, colNumber) => {
+                        cell.border = {
+                            top: { style: 'thin' },
+                            left: { style: 'thin' },
+                            bottom: { style: 'thin' },
+                            right: { style: 'thin' }
+                        };
+                        cell.alignment = { vertical: 'middle' };
+
+                        if (colNumber === 1) {
+                            cell.alignment = { ...cell.alignment, horizontal: 'center' };
+                        }
+                        if (colNumber === 4) {
+                            cell.numFmt = '#,##0';
+                            cell.alignment = { ...cell.alignment, horizontal: 'right' };
+                        }
+                    });
+
+                    rowIndex3++;
+                });
+
+                // Total
+                const tamUngSum = tamUngFiltered.reduce((sum, tu) => sum + (parseFloat(tu.soTien) || 0), 0);
+                const totalRow3 = sheet3.getRow(rowIndex3);
+                totalRow3.values = ['', 'TỔNG CỘNG:', '', tamUngSum, ''];
+                totalRow3.font = { bold: true, size: 11 };
+                totalRow3.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE8F5E9' } };
+                totalRow3.eachCell((cell, colNumber) => {
+                    cell.border = {
+                        top: { style: 'thin' },
+                        left: { style: 'thin' },
+                        bottom: { style: 'thin' },
+                        right: { style: 'thin' }
+                    };
+                    cell.alignment = { vertical: 'middle' };
+
+                    if (colNumber === 4) {
+                        cell.numFmt = '#,##0';
+                        cell.alignment = { ...cell.alignment, horizontal: 'right' };
+                    }
+                });
+            } else {
+                const row = sheet3.getRow(rowIndex3);
+                row.values = [1, 'Không có dữ liệu tạm ứng', '', '', ''];
+                row.eachCell(cell => {
+                    cell.border = {
+                        top: { style: 'thin' },
+                        left: { style: 'thin' },
+                        bottom: { style: 'thin' },
+                        right: { style: 'thin' }
+                    };
+                    cell.alignment = { vertical: 'middle', horizontal: 'center' };
+                });
+            }
+
+            // ========== SHEET 4: CHI TIẾT HOÀN ỨNG ==========
+            const sheet4 = workbook.addWorksheet('Chi tiết hoàn ứng');
+            sheet4.columns = [
+                { width: 8 },
+                { width: 22 },
+                { width: 18 },
+                { width: 22 },
+                { width: 38 }
+            ];
+
+            // Header
+            const header4 = sheet4.getRow(1);
+            header4.values = ['STT', 'MÃ TẠM ỨNG', 'NGÀY HOÀN', 'SỐ TIỀN HOÀN (VNĐ)', 'GHI CHÚ'];
+            header4.height = 25;
+            header4.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11 };
+            header4.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2D5016' } };
+            header4.alignment = { horizontal: 'center', vertical: 'middle' };
+            header4.eachCell(cell => {
+                cell.border = {
+                    top: { style: 'thin' },
+                    left: { style: 'thin' },
+                    bottom: { style: 'thin' },
+                    right: { style: 'thin' }
+                };
+            });
+
+            // Data
+            const hoanUngData = receiptData.chiTietHoanUng || [];
+
+            let rowIndex4 = 2;
+            if (hoanUngData.length > 0) {
+                hoanUngData.forEach((hu, index) => {
+                    const row = sheet4.getRow(rowIndex4);
+                    row.values = [
+                        index + 1,
+                        hu.maTamUng,
+                        new Date(hu.ngayHoan).toLocaleDateString('vi-VN'),
+                        parseFloat(hu.soTienHoan) || 0,
+                        hu.ghiChu || ''
+                    ];
+
+                    row.eachCell((cell, colNumber) => {
+                        cell.border = {
+                            top: { style: 'thin' },
+                            left: { style: 'thin' },
+                            bottom: { style: 'thin' },
+                            right: { style: 'thin' }
+                        };
+                        cell.alignment = { vertical: 'middle' };
+
+                        if (colNumber === 1) {
+                            cell.alignment = { ...cell.alignment, horizontal: 'center' };
+                        }
+                        if (colNumber === 4) {
+                            cell.numFmt = '#,##0';
+                            cell.alignment = { ...cell.alignment, horizontal: 'right' };
+                        }
+                    });
+
+                    rowIndex4++;
+                });
+
+                // Total
+                const hoanUngSum = hoanUngData.reduce((sum, hu) => sum + (parseFloat(hu.soTienHoan) || 0), 0);
+                const totalRow4 = sheet4.getRow(rowIndex4);
+                totalRow4.values = ['', 'TỔNG CỘNG:', '', hoanUngSum, ''];
+                totalRow4.font = { bold: true, size: 11 };
+                totalRow4.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE8F5E9' } };
+                totalRow4.eachCell((cell, colNumber) => {
+                    cell.border = {
+                        top: { style: 'thin' },
+                        left: { style: 'thin' },
+                        bottom: { style: 'thin' },
+                        right: { style: 'thin' }
+                    };
+                    cell.alignment = { vertical: 'middle' };
+
+                    if (colNumber === 4) {
+                        cell.numFmt = '#,##0';
+                        cell.alignment = { ...cell.alignment, horizontal: 'right' };
+                    }
+                });
+            } else {
+                const row = sheet4.getRow(rowIndex4);
+                row.values = [1, 'Không có dữ liệu hoàn ứng', '', '', ''];
+                row.eachCell(cell => {
+                    cell.border = {
+                        top: { style: 'thin' },
+                        left: { style: 'thin' },
+                        bottom: { style: 'thin' },
+                        right: { style: 'thin' }
+                    };
+                    cell.alignment = { vertical: 'middle', horizontal: 'center' };
+                });
+            }
+
+            // Xuất file
+            const buffer = await workbook.xlsx.writeBuffer();
+            const blob = new Blob([buffer], {
+                type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            });
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `BienlaiVienPhi_${receiptData.code || 'VP2025000008'}_${new Date().toISOString().split('T')[0]}.xlsx`;
+            link.click();
+            window.URL.revokeObjectURL(url);
+
+        } catch (error) {
+            console.error('Error exporting Excel:', error);
+            alert('Có lỗi xảy ra khi xuất file Excel!');
+        }
+
+        // Helper function to apply borders and styles
+        const applyBordersAndStyles = (ws, dataLength, colCount, hasTotal = false) => {
+            const borderStyle = {
+                top: { style: 'thin', color: { rgb: '000000' } },
+                bottom: { style: 'thin', color: { rgb: '000000' } },
+                left: { style: 'thin', color: { rgb: '000000' } },
+                right: { style: 'thin', color: { rgb: '000000' } }
+            };
+
+            const headerStyle = {
+                fill: { fgColor: { rgb: '2D5016' } },
+                font: { bold: true, color: { rgb: 'FFFFFF' }, sz: 11 },
+                alignment: { horizontal: 'center', vertical: 'center' },
+                border: borderStyle
+            };
+
+            const cellStyle = {
+                border: borderStyle,
+                alignment: { vertical: 'center' }
+            };
+
+            const totalStyle = {
+                fill: { fgColor: { rgb: 'E8F5E9' } },
+                font: { bold: true, sz: 11 },
+                border: borderStyle,
+                alignment: { vertical: 'center' }
+            };
+
+            // Apply header style (row 1)
+            for (let col = 0; col < colCount; col++) {
+                const cellRef = XLSX.utils.encode_cell({ r: 0, c: col });
+                if (!ws[cellRef]) ws[cellRef] = {};
+                ws[cellRef].s = headerStyle;
+            }
+
+            // Apply data cell borders
+            for (let row = 1; row < dataLength; row++) {
+                for (let col = 0; col < colCount; col++) {
+                    const cellRef = XLSX.utils.encode_cell({ r: row, c: col });
+                    if (!ws[cellRef]) ws[cellRef] = { v: '', t: 's' };
+                    ws[cellRef].s = cellStyle;
+                }
+            }
+
+            // Apply total row style if exists
+            if (hasTotal && dataLength > 1) {
+                const totalRowIndex = dataLength - 1;
+                for (let col = 0; col < colCount; col++) {
+                    const cellRef = XLSX.utils.encode_cell({ r: totalRowIndex, c: col });
+                    if (!ws[cellRef]) ws[cellRef] = { v: '', t: 's' };
+                    ws[cellRef].s = totalStyle;
+                }
+            }
+        };
+
+        // Tạo workbook
+        const wb = XLSX.utils.book_new();
+
+        // ========== Sheet 1: Thông tin tổng hợp ==========
+        const summaryData = [
+            ['BIÊN LAI VIỆN PHÍ'],
+            [''],
+            ['Mã biên lai:', receiptData.code || 'VP2025000008'],
+            ['Mã hồ sơ:', receiptData.recordCode || 'HS001'],
+            ['Ngày tạo:', receiptData.createdDate || '07/10/2025 - 16:18'],
+            ['Người thu:', receiptData.collector || 'admin'],
+            ['Trạng thái:', receiptData.status === 'cancelled' ? 'ĐÃ HỦY' : receiptData.status === 'paid' ? 'ĐÃ THANH TOÁN' : 'CHƯA THANH TOÁN'],
+            [''],
+            ['THÔNG TIN THANH TOÁN'],
+            [''],
+            ['Tổng tiền:', tongTien, 'VNĐ'],
+            ['Tỷ lệ bảo hiểm chi trả:', receiptData.insuranceRate || '0%'],
+            ['Tiền bảo hiểm:', tienBaoHiem, 'VNĐ'],
+            ['Đã tạm ứng:', tongTamUng, 'VNĐ'],
+            ['Đã hoàn ứng:', tongHoanUng, 'VNĐ'],
+            ['Tiền BN phải trả:', tongTien - tienBaoHiem, 'VNĐ'],
+            ['Còn phải trả:', Math.abs(conPhaiTra), 'VNĐ'],
+            [''],
+            ['Ghi chú:', receiptData.note || 'Khám tổng quát']
+        ];
+
+        const ws1 = XLSX.utils.aoa_to_sheet(summaryData);
+        ws1['!cols'] = [{ wch: 25 }, { wch: 25 }, { wch: 10 }];
+
+        // Style title
+        ws1['A1'].s = {
+            font: { bold: true, sz: 16, color: { rgb: '2D5016' } },
+            alignment: { horizontal: 'center', vertical: 'center' }
+        };
+        ws1['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 2 } }];
+
+        // Style section headers
+        ['A9', 'A3'].forEach(cell => {
+            if (ws1[cell]) {
+                ws1[cell].s = {
+                    font: { bold: true, sz: 12, color: { rgb: '2D5016' } },
+                    fill: { fgColor: { rgb: 'E8F5E9' } }
+                };
+            }
+        });
+
+        // Format number cells
+        ['B11', 'B13', 'B14', 'B15', 'B16', 'B17'].forEach(cell => {
+            if (ws1[cell] && typeof ws1[cell].v === 'number') {
+                ws1[cell].z = '#,##0';
+            }
+        });
+
+        XLSX.utils.book_append_sheet(wb, ws1, 'Tổng hợp');
+
+        // ========== Sheet 2: Chi tiết dịch vụ ==========
+        const servicesHeader = [['MÃ DỊCH VỤ', 'SỐ LƯỢNG', 'ĐơN GIÁ (VNĐ)', 'THÀNH TIỀN (VNĐ)', 'TIỀN BẢO HIỂM (VNĐ)']];
+        const servicesData = receiptData.services?.length > 0
+            ? receiptData.services.map(service => [
+                service.code,
+                service.quantity,
+                service.unitPrice || 0,
+                service.amount || 0,
+                service.insuranceAmount || 0
+            ])
+            : [['Không có dữ liệu', '', '', '', '']];
+
+        const servicesTotal = [
+            ['TỔNG CỘNG:', '', '', tongTien, tienBaoHiem]
+        ];
+
+        const ws2Data = [...servicesHeader, ...servicesData, ...servicesTotal];
+        const ws2 = XLSX.utils.aoa_to_sheet(ws2Data);
+        ws2['!cols'] = [{ wch: 18 }, { wch: 12 }, { wch: 18 }, { wch: 18 }, { wch: 22 }];
+
+        applyBordersAndStyles(ws2, ws2Data.length, 5, true);
+
+        // Format number columns
+        for (let row = 1; row < ws2Data.length; row++) {
+            ['C', 'D', 'E'].forEach(col => {
+                const cellRef = col + (row + 1);
+                if (ws2[cellRef] && typeof ws2[cellRef].v === 'number') {
+                    ws2[cellRef].z = '#,##0';
+                }
+            });
+        }
+
+        XLSX.utils.book_append_sheet(wb, ws2, 'Chi tiết dịch vụ');
+
+        // ========== Sheet 3: Chi tiết tạm ứng ==========
+        const tamUngFiltered = receiptData.tamUngs?.filter(tu => !(tu.loaiTamUng === 3 && tu.trangThai === 3)) || [];
+
+        const tamUngHeader = [['STT', 'MÃ TẠM ỨNG', 'NGÀY TẠM ỨNG', 'SỐ TIỀN (VNĐ)', 'GHI CHÚ']];
+        const tamUngData = tamUngFiltered.length > 0
+            ? tamUngFiltered.map((tu, index) => [
+                index + 1,
+                tu.maTamUng,
+                new Date(tu.ngayTamUng).toLocaleDateString('vi-VN'),
+                parseFloat(tu.soTien) || 0,
+                tu.ghiChu || ''
+            ])
+            : [[1, 'Không có dữ liệu tạm ứng', '', '', '']];
+
+        const tamUngSum = tamUngFiltered.reduce((sum, tu) => sum + (parseFloat(tu.soTien) || 0), 0);
+        const tamUngTotal = [
+            ['', 'TỔNG CỘNG:', '', tamUngSum, '']
+        ];
+
+        const ws3Data = [...tamUngHeader, ...tamUngData, ...(tamUngFiltered.length > 0 ? tamUngTotal : [])];
+        const ws3 = XLSX.utils.aoa_to_sheet(ws3Data);
+        ws3['!cols'] = [{ wch: 8 }, { wch: 22 }, { wch: 18 }, { wch: 18 }, { wch: 35 }];
+
+        applyBordersAndStyles(ws3, ws3Data.length, 5, tamUngFiltered.length > 0);
+
+        // Format number column
+        for (let row = 1; row < ws3Data.length; row++) {
+            const cellRef = 'D' + (row + 1);
+            if (ws3[cellRef] && typeof ws3[cellRef].v === 'number') {
+                ws3[cellRef].z = '#,##0';
+            }
+        }
+
+        XLSX.utils.book_append_sheet(wb, ws3, 'Chi tiết tạm ứng');
+
+        // ========== Sheet 4: Chi tiết hoàn ứng ==========
+        const hoanUngData = receiptData.chiTietHoanUng || [];
+
+        const hoanUngHeader = [['STT', 'MÃ TẠM ỨNG', 'NGÀY HOÀN', 'SỐ TIỀN HOÀN (VNĐ)', 'GHI CHÚ']];
+        const hoanUngRows = hoanUngData.length > 0
+            ? hoanUngData.map((hu, index) => [
+                index + 1,
+                hu.maTamUng,
+                new Date(hu.ngayHoan).toLocaleDateString('vi-VN'),
+                parseFloat(hu.soTienHoan) || 0,
+                hu.ghiChu || ''
+            ])
+            : [[1, 'Không có dữ liệu hoàn ứng', '', '', '']];
+
+        const hoanUngSum = hoanUngData.reduce((sum, hu) => sum + (parseFloat(hu.soTienHoan) || 0), 0);
+        const hoanUngTotal = [
+            ['', 'TỔNG CỘNG:', '', hoanUngSum, '']
+        ];
+
+        const ws4Data = [...hoanUngHeader, ...hoanUngRows, ...(hoanUngData.length > 0 ? hoanUngTotal : [])];
+        const ws4 = XLSX.utils.aoa_to_sheet(ws4Data);
+        ws4['!cols'] = [{ wch: 8 }, { wch: 22 }, { wch: 18 }, { wch: 20 }, { wch: 35 }];
+
+        applyBordersAndStyles(ws4, ws4Data.length, 5, hoanUngData.length > 0);
+
+        // Format number column
+        for (let row = 1; row < ws4Data.length; row++) {
+            const cellRef = 'D' + (row + 1);
+            if (ws4[cellRef] && typeof ws4[cellRef].v === 'number') {
+                ws4[cellRef].z = '#,##0';
+            }
+        }
+
+        XLSX.utils.book_append_sheet(wb, ws4, 'Chi tiết hoàn ứng');
+
+        // Xuất file
+        const fileName = `BienlaiVienPhi_${receiptData.code || 'VP2025000008'}_${new Date().toISOString().split('T')[0]}.xlsx`;
+        XLSX.writeFile(wb, fileName);
+    };
+
     return (
         <div className="fixed inset-0 flex items-center justify-center z-50 p-4">
             {/* Overlay */}
@@ -56,13 +665,24 @@ const DetailAccountingPopup = ({ isOpen, onClose, receiptData, onAdvanceClick, o
                             Chi tiết biên lai {receiptData?.code || 'VP2025000008'}
                         </h2>
                     </div>
-                    <button
-                        className="w-8 h-8 rounded-[5px] flex items-center justify-center transition-all hover:bg-white hover:bg-opacity-20 cursor-pointer"
-                        style={{ backgroundColor: 'rgba(255, 255, 255, 0.5)' }}
-                        onClick={onClose}
-                    >
-                        <i className="fas fa-times text-white"></i>
-                    </button>
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={handleExportExcel}
+                            className="px-4 py-2 rounded-lg flex items-center gap-2 transition-all hover:bg-white hover:bg-opacity-20 cursor-pointer"
+                            style={{ backgroundColor: 'rgba(255, 255, 255, 0.3)' }}
+                            title="Xuất Excel"
+                        >
+                            <i className="fas fa-file-excel text-white"></i>
+                            <span className="text-white text-sm font-semibold">Xuất Excel</span>
+                        </button>
+                        <button
+                            className="w-8 h-8 rounded-[5px] flex items-center justify-center transition-all hover:bg-white hover:bg-opacity-20 cursor-pointer"
+                            style={{ backgroundColor: 'rgba(255, 255, 255, 0.5)' }}
+                            onClick={onClose}
+                        >
+                            <i className="fas fa-times text-white"></i>
+                        </button>
+                    </div>
                 </div>
 
                 <div className="modal-body p-8 overflow-y-auto">

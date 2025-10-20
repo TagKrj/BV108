@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import ExcelJS from 'exceljs';
 import DetailAccountingPopup from '../components/accounting/detailAccounting';
 import AdvanceAccountingPopup from '../components/accounting/advanceAccounting';
 import CompleteAccountingPopup from '../components/accounting/completeAccounting';
@@ -469,6 +470,132 @@ const AccountingPage = () => {
         })
         .reverse(); // Đảo ngược mảng để item mới nhất lên đầu
 
+    // Hàm xuất Excel danh sách viện phí
+    const handleExportExcel = async () => {
+        try {
+            // Tạo workbook
+            const workbook = new ExcelJS.Workbook();
+            workbook.creator = 'Hospital Management System';
+            workbook.created = new Date();
+
+            const sheet = workbook.addWorksheet('Danh sách viện phí');
+
+            // Set column widths
+            sheet.columns = [
+                { width: 20 }, // Mã viện phí
+                { width: 18 }, // Mã hồ sơ
+                { width: 22 }, // Tiền BN trả
+                { width: 22 }, // Tổng tiền
+                { width: 18 }, // Trạng thái
+                { width: 18 }  // Ngày tạo
+            ];
+
+            // Header row
+            const headerRow = sheet.getRow(1);
+            headerRow.values = ['MÃ VIỆN PHÍ', 'MÃ HỒ SƠ', 'TIỀN BN TRẢ (VNĐ)', 'TỔNG TIỀN (VNĐ)', 'TRẠNG THÁI', 'NGÀY TẠO'];
+            headerRow.height = 25;
+            headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11 };
+            headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2D5016' } };
+            headerRow.alignment = { horizontal: 'center', vertical: 'middle' };
+            headerRow.eachCell(cell => {
+                cell.border = {
+                    top: { style: 'thin' },
+                    left: { style: 'thin' },
+                    bottom: { style: 'thin' },
+                    right: { style: 'thin' }
+                };
+            });
+
+            // Data rows
+            const dataToExport = searchTerm ? filteredReceipts : receipts.slice().reverse();
+
+            dataToExport.forEach((receipt, index) => {
+                const rowNum = index + 2;
+                const row = sheet.getRow(rowNum);
+                const paymentStatus = getPaymentStatus(receipt.trangThaiThanhToan);
+
+                row.values = [
+                    receipt.maVienPhi,
+                    receipt.maHoSo,
+                    receipt.tienBenhNhanTra || 0,
+                    receipt.tongTien || 0,
+                    paymentStatus.label,
+                    formatDate(receipt.ngayTao)
+                ];
+
+                row.eachCell((cell, colNumber) => {
+                    cell.border = {
+                        top: { style: 'thin' },
+                        left: { style: 'thin' },
+                        bottom: { style: 'thin' },
+                        right: { style: 'thin' }
+                    };
+                    cell.alignment = { vertical: 'middle' };
+
+                    // Format số tiền (cột 3 và 4)
+                    if (colNumber === 3 || colNumber === 4) {
+                        cell.numFmt = '#,##0';
+                        cell.alignment = { ...cell.alignment, horizontal: 'right' };
+                    }
+
+                    // Center align cho trạng thái và ngày tạo
+                    if (colNumber === 5 || colNumber === 6) {
+                        cell.alignment = { ...cell.alignment, horizontal: 'center' };
+                    }
+                });
+            });
+
+            // Total row
+            const totalRow = sheet.getRow(dataToExport.length + 2);
+            const tongTienBNTra = dataToExport.reduce((sum, r) => sum + (parseFloat(r.tienBenhNhanTra) || 0), 0);
+            const tongTien = dataToExport.reduce((sum, r) => sum + (parseFloat(r.tongTien) || 0), 0);
+
+            totalRow.values = [
+                'TỔNG CỘNG:',
+                '',
+                tongTienBNTra,
+                tongTien,
+                '',
+                ''
+            ];
+            totalRow.font = { bold: true, size: 11 };
+            totalRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE8F5E9' } };
+            totalRow.eachCell((cell, colNumber) => {
+                cell.border = {
+                    top: { style: 'thin' },
+                    left: { style: 'thin' },
+                    bottom: { style: 'thin' },
+                    right: { style: 'thin' }
+                };
+                cell.alignment = { vertical: 'middle' };
+
+                if (colNumber === 3 || colNumber === 4) {
+                    cell.numFmt = '#,##0';
+                    cell.alignment = { ...cell.alignment, horizontal: 'right' };
+                }
+            });
+
+            // Export
+            const buffer = await workbook.xlsx.writeBuffer();
+            const blob = new Blob([buffer], {
+                type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            });
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            const fileName = searchTerm
+                ? `DanhSachVienPhi_TimKiem_${new Date().toISOString().split('T')[0]}.xlsx`
+                : `DanhSachVienPhi_${new Date().toISOString().split('T')[0]}.xlsx`;
+            link.download = fileName;
+            link.click();
+            window.URL.revokeObjectURL(url);
+
+        } catch (error) {
+            console.error('Error exporting Excel:', error);
+            alert('Có lỗi xảy ra khi xuất file Excel!');
+        }
+    };
+
     return (
         <div className="accounting-page">
             {/* Form Card */}
@@ -766,7 +893,7 @@ const AccountingPage = () => {
                     </div>
 
                     {/* Search Input */}
-                    <div className="search-section">
+                    <div className="search-section flex items-center gap-3">
                         <div className="relative w-[400px]">
                             <input
                                 type="text"
@@ -787,6 +914,13 @@ const AccountingPage = () => {
                                 </button>
                             )}
                         </div>
+                        <button
+                            onClick={handleExportExcel}
+                            className="h-[42px] px-6 bg-[#2D5016] text-white rounded-lg hover:bg-[#3d6b1f] transition-colors flex items-center gap-2 font-medium"
+                        >
+                            <i className="fas fa-file-excel"></i>
+                            Xuất Excel
+                        </button>
                     </div>
                 </div>
 
