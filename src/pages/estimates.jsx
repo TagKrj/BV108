@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import DetailEstimate from '../components/detailEstimate';
+import EditServiceGroup from '../components/editServiceGroup';
+import serviceGroupService from '../services/api/serviceGroupService';
 
 const EstimatesPage = () => {
     // State for view mode (list or create)
@@ -9,48 +11,16 @@ const EstimatesPage = () => {
     const [isDetailOpen, setIsDetailOpen] = useState(false);
     const [selectedEstimate, setSelectedEstimate] = useState(null);
 
-    // Mock data for list view
-    const mockEstimates = [
-        {
-            id: '49f24066-96d9',
-            budgetCode: 'Q1/2024',
-            item: 'Khoa Nội',
-            amount: '5,500,000,000',
-            status: 'rejected', // rejected, approved, pending
-            executingUnit: 'giamdoc',
-            manager: 'truongkhoa_noi',
-            createdAt: '07/10/2025',
-            startDate: '01/01/2024',
-            endDate: '31/03/2024',
-            notes: 'Ngân sách cho thiết bị và vật tư y tế năm 2024'
-        },
-        {
-            id: '8a3b5c12-45e6',
-            budgetCode: 'Q2/2024',
-            item: 'Khoa Ngoại',
-            amount: '6,200,000,000',
-            status: 'approved',
-            executingUnit: 'giamdoc',
-            manager: 'truongkhoa_ngoai',
-            createdAt: '03/10/2025',
-            startDate: '01/04/2024',
-            endDate: '30/06/2024',
-            notes: 'Bổ sung trang thiết bị mổ mới'
-        },
-        {
-            id: '2f7d8e90-12ab',
-            budgetCode: 'Q3/2024',
-            item: 'Khoa Sản',
-            amount: '4,800,000,000',
-            status: 'pending',
-            executingUnit: '-',
-            manager: 'truongkhoa_san',
-            createdAt: '06/10/2025',
-            startDate: '01/07/2024',
-            endDate: '30/09/2024',
-            notes: 'Nâng cấp phòng sinh và chăm sóc sơ sinh'
-        }
-    ];
+    // State for EditServiceGroup component
+    const [isEditOpen, setIsEditOpen] = useState(false);
+    const [selectedServiceGroup, setSelectedServiceGroup] = useState(null);
+
+    // State for service groups list
+    const [serviceGroups, setServiceGroups] = useState([]);
+    const [loading, setLoading] = useState(false);
+    const [searchText, setSearchText] = useState('');
+
+
 
     // Form state
     const [formData, setFormData] = useState({
@@ -68,29 +38,46 @@ const EstimatesPage = () => {
     // Error state
     const [errors, setErrors] = useState({});
 
+    // Load service groups on component mount
+    useEffect(() => {
+        loadServiceGroups();
+    }, []);
+
+    // Load service groups from API
+    const loadServiceGroups = async () => {
+        try {
+            setLoading(true);
+            const response = await serviceGroupService.getServiceGroups();
+
+            console.log('API Response:', response);
+
+            // Check if response has data in a nested property
+            let dataArray = response;
+            if (response && response.data) {
+                dataArray = response.data;
+            }
+
+            // Reverse array to show newest first
+            const sortedGroups = Array.isArray(dataArray) ? [...dataArray].reverse() : [];
+            console.log('Service Groups to display:', sortedGroups);
+            setServiceGroups(sortedGroups);
+        } catch (error) {
+            console.error('Error loading service groups:', error);
+            // Keep empty array if error
+            setServiceGroups([]);
+        } finally {
+            setLoading(false);
+        }
+    };
+
     // Handle input change
     const handleChange = (e) => {
         const { name, value } = e.target;
 
-        // Format currency for amount field
-        if (name === 'amount') {
-            // Remove non-numeric characters
-            const numericValue = value.replace(/[^0-9]/g, '');
-
-            // Format with commas for thousands
-            const formattedValue = numericValue ?
-                new Intl.NumberFormat('vi-VN').format(parseInt(numericValue)) : '';
-
-            setFormData(prev => ({
-                ...prev,
-                [name]: formattedValue
-            }));
-        } else {
-            setFormData(prev => ({
-                ...prev,
-                [name]: value
-            }));
-        }
+        setFormData(prev => ({
+            ...prev,
+            [name]: value
+        }));
 
         // Clear errors when typing
         if (errors[name]) {
@@ -104,38 +91,56 @@ const EstimatesPage = () => {
     // Validate form
     const validateForm = () => {
         const newErrors = {};
-        if (!formData.budgetCode) newErrors.budgetCode = 'Vui lòng chọn mã ngân sách';
-        if (!formData.amount) newErrors.amount = 'Vui lòng nhập số tiền dự toán';
-        if (!formData.startDate) newErrors.startDate = 'Vui lòng chọn ngày bắt đầu';
-        if (!formData.endDate) newErrors.endDate = 'Vui lòng chọn ngày kết thúc';
+        if (!formData.budgetCode) newErrors.budgetCode = 'Vui lòng nhập mã nhóm dịch vụ';
+        if (!formData.amount) newErrors.amount = 'Vui lòng nhập tên nhóm dịch vụ';
 
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
     };
 
     // Handle form submission
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
 
         if (validateForm()) {
-            // Process the form data (would typically be an API call)
-            console.log('Form submitted:', formData);
-            alert('Đã tạo dự toán thành công!');
+            try {
+                setLoading(true);
 
-            // Reset form and return to list view
-            setFormData({
-                budgetCode: '',
-                item: '',
-                itemType: '',
-                amount: '',
-                notes: '',
-                executingUnit: '',
-                manager: '',
-                startDate: '',
-                endDate: ''
-            });
+                // Prepare data for API
+                const serviceGroupData = {
+                    maNhomDichVu: formData.budgetCode,
+                    tenNhomDichVu: formData.amount,
+                    moTa: formData.item || '',
+                };
 
-            setView('list');
+                // Call API to create service group
+                await serviceGroupService.createServiceGroup(serviceGroupData);
+
+                alert('Đã tạo nhóm dịch vụ thành công!');
+
+                // Reset form
+                setFormData({
+                    budgetCode: '',
+                    item: '',
+                    itemType: '',
+                    amount: '',
+                    notes: '',
+                    executingUnit: '',
+                    manager: '',
+                    startDate: '',
+                    endDate: ''
+                });
+
+                // Reload service groups list
+                await loadServiceGroups();
+
+                setView('list');
+            } catch (error) {
+                console.error('Error creating service group:', error);
+                alert(error?.message || 'Có lỗi xảy ra khi tạo nhóm dịch vụ!');
+            } finally {
+                setLoading(false);
+            }
         }
     };
 
@@ -169,11 +174,73 @@ const EstimatesPage = () => {
         }
     };
 
+    // Filter service groups based on search text
+    const filteredServiceGroups = serviceGroups.filter((group) => {
+        if (!searchText) return true;
+
+        const searchLower = searchText.toLowerCase();
+        return (
+            group.maNhomDichVu?.toLowerCase().includes(searchLower) ||
+            group.tenNhomDichVu?.toLowerCase().includes(searchLower) ||
+            group.moTa?.toLowerCase().includes(searchLower)
+        );
+    });
+
     // Handle delete action
-    const handleDelete = (id) => {
-        console.log('Delete estimate with ID:', id);
-        // Would typically make an API call here
-        alert(`Đã xóa dự toán với ID: ${id}`);
+    const handleDelete = async (maNhomDichVu) => {
+        // Confirm before delete
+        if (!window.confirm(`Bạn có chắc chắn muốn xóa nhóm dịch vụ "${maNhomDichVu}"?`)) {
+            return;
+        }
+
+        try {
+            setLoading(true);
+            await serviceGroupService.deleteServiceGroup(maNhomDichVu);
+
+            alert('Đã xóa nhóm dịch vụ thành công!');
+
+            // Reload service groups list
+            await loadServiceGroups();
+        } catch (error) {
+            console.error('Error deleting service group:', error);
+            alert(error?.message || 'Có lỗi xảy ra khi xóa nhóm dịch vụ!');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Handle edit action
+    const handleEdit = (serviceGroup) => {
+        setSelectedServiceGroup(serviceGroup);
+        setIsEditOpen(true);
+    };
+
+    // Handle update service group
+    const handleUpdateServiceGroup = async (updatedData) => {
+        try {
+            setLoading(true);
+
+            const { maNhomDichVu, tenNhomDichVu, moTa } = updatedData;
+
+            await serviceGroupService.updateServiceGroup(maNhomDichVu, {
+                tenNhomDichVu,
+                moTa,
+            });
+
+            alert('Đã cập nhật nhóm dịch vụ thành công!');
+
+            // Close popup
+            setIsEditOpen(false);
+            setSelectedServiceGroup(null);
+
+            // Reload service groups list
+            await loadServiceGroups();
+        } catch (error) {
+            console.error('Error updating service group:', error);
+            alert(error?.message || 'Có lỗi xảy ra khi cập nhật nhóm dịch vụ!');
+        } finally {
+            setLoading(false);
+        }
     };
 
     // Handle detail view
@@ -194,6 +261,17 @@ const EstimatesPage = () => {
                 estimate={selectedEstimate}
             />
 
+            {/* Edit Service Group Popup */}
+            <EditServiceGroup
+                isOpen={isEditOpen}
+                onClose={() => {
+                    setIsEditOpen(false);
+                    setSelectedServiceGroup(null);
+                }}
+                serviceGroup={selectedServiceGroup}
+                onSuccess={handleUpdateServiceGroup}
+            />
+
             <form onSubmit={handleSubmit} className="p-8 bg-white rounded-[15px] border border-gray-200 shadow-sm">
                 {/* Card Title */}
                 <div className="card-title mb-10">
@@ -202,39 +280,30 @@ const EstimatesPage = () => {
                             <i className="fas fa-coins text-[#2D5016] text-xl"></i>
                         </div>
                         <h2 className="text-xl font-semibold text-gray-800">
-                            Tạo dự toán mới
+                            Tạo nhóm dịch vụ mới
                         </h2>
                     </div>
                 </div>
                 <div className="flex justify-between gap-8">
                     {/* Left Column */}
                     <div className="form-layout w-1/2">
-                        {/* Budget Code */}
+                        {/* Service Group Code */}
                         <div className="form-group mb-5">
                             <div className="flex items-center mb-2">
                                 <label className="form-label block text-sm font-medium text-gray-700">
-                                    Mã ngân sách
+                                    Mã nhóm dịch vụ
                                 </label>
                                 <span className="text-red-500 font-bold ml-1">*</span>
                             </div>
                             <div className="relative">
-                                <select
+                                <input
+                                    type="text"
                                     name="budgetCode"
                                     value={formData.budgetCode}
                                     onChange={handleChange}
-                                    className={`w-full h-[43px] px-4 border ${errors.budgetCode ? 'border-red-500' : 'border-gray-300'} rounded-lg appearance-none focus:outline-none focus:ring-2 focus:ring-[#2D5016] focus:border-transparent bg-white`}
-                                >
-                                    <option value="">Chọn mã ngân sách</option>
-                                    <option value="Q1/2024">Q1/2024</option>
-                                    <option value="Q2/2024">Q2/2024</option>
-                                    <option value="Q3/2024">Q3/2024</option>
-                                    <option value="Q4/2024">Q4/2024</option>
-                                </select>
-                                <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
-                                    <svg width="12" height="6" viewBox="0 0 12 6" fill="none">
-                                        <path d="M1 1L6 5L11 1" stroke="#8C8C8C" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                                    </svg>
-                                </div>
+                                    className={`w-full h-[43px] px-4 border ${errors.budgetCode ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2D5016] focus:border-transparent`}
+                                    placeholder="Nhập mã nhóm dịch vụ"
+                                />
                             </div>
                             {errors.budgetCode && (
                                 <div className="error-message flex items-center mt-1.5 text-red-500">
@@ -244,30 +313,22 @@ const EstimatesPage = () => {
                             )}
                         </div>
 
-                        {/* Item */}
+                        {/* Description */}
                         <div className="form-group mb-5">
                             <div className="flex items-center mb-2">
                                 <label className="form-label block text-sm font-medium text-gray-700">
-                                    Hạng mục
+                                    Mô tả
                                 </label>
                             </div>
                             <div className="relative">
-                                <select
+                                <input
+                                    type="text"
                                     name="item"
                                     value={formData.item}
                                     onChange={handleChange}
-                                    className={`w-full h-[43px] px-4 border ${errors.item ? 'border-red-500' : 'border-gray-300'} rounded-lg appearance-none focus:outline-none focus:ring-2 focus:ring-[#2D5016] focus:border-transparent bg-white`}
-                                >
-                                    <option value="">Chọn hạng mục</option>
-                                    <option value="Khoa Nội">Khoa Nội</option>
-                                    <option value="Khoa Ngoại">Khoa Ngoại</option>
-                                    <option value="Khoa Sản">Khoa Sản</option>
-                                </select>
-                                <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
-                                    <svg width="12" height="6" viewBox="0 0 12 6" fill="none">
-                                        <path d="M1 1L6 5L11 1" stroke="#8C8C8C" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                                    </svg>
-                                </div>
+                                    className={`w-full h-[43px] px-4 border ${errors.item ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2D5016] focus:border-transparent`}
+                                    placeholder="Nhập mô tả"
+                                />
                             </div>
                             {errors.item && (
                                 <div className="error-message flex items-center mt-1.5 text-red-500">
@@ -277,80 +338,15 @@ const EstimatesPage = () => {
                             )}
                         </div>
 
-                        {/* Item Type */}
-                        <div className="form-group mb-5">
-                            <div className="flex items-center mb-2">
-                                <label className="form-label block text-sm font-medium text-gray-700">
-                                    Loại hạng mục
-                                </label>
-                            </div>
-                            <div className="relative">
-                                <select
-                                    name="itemType"
-                                    value={formData.itemType}
-                                    onChange={handleChange}
-                                    className={`w-full h-[43px] px-4 border ${errors.itemType ? 'border-red-500' : 'border-gray-300'} rounded-lg appearance-none focus:outline-none focus:ring-2 focus:ring-[#2D5016] focus:border-transparent bg-white`}
-                                >
-                                    <option value="">Chọn loại hạng mục</option>
-                                    <option value="Trang thiết bị">Trang thiết bị</option>
-                                    <option value="Vật tư y tế">Vật tư y tế</option>
-                                    <option value="Thuốc">Thuốc</option>
-                                </select>
-                                <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
-                                    <svg width="12" height="6" viewBox="0 0 12 6" fill="none">
-                                        <path d="M1 1L6 5L11 1" stroke="#8C8C8C" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                                    </svg>
-                                </div>
-                            </div>
-                            {errors.itemType && (
-                                <div className="error-message flex items-center mt-1.5 text-red-500">
-                                    <i className="fas fa-exclamation-circle text-xs mr-1.5"></i>
-                                    <span className="text-xs">{errors.itemType}</span>
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Manager */}
-                        <div className="form-group">
-                            <div className="flex items-center mb-2">
-                                <label className="form-label block text-sm font-medium text-gray-700">
-                                    Người phụ trách
-                                </label>
-                            </div>
-                            <div className="relative">
-                                <select
-                                    name="manager"
-                                    value={formData.manager}
-                                    onChange={handleChange}
-                                    className={`w-full h-[43px] px-4 border ${errors.manager ? 'border-red-500' : 'border-gray-300'} rounded-lg appearance-none focus:outline-none focus:ring-2 focus:ring-[#2D5016] focus:border-transparent bg-white`}
-                                >
-                                    <option value="">Chọn người phụ trách</option>
-                                    <option value="giamdoc">Giám đốc</option>
-                                    <option value="truongphong">Trưởng phòng</option>
-                                    <option value="truongkhoa">Trưởng khoa</option>
-                                </select>
-                                <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
-                                    <svg width="12" height="6" viewBox="0 0 12 6" fill="none">
-                                        <path d="M1 1L6 5L11 1" stroke="#8C8C8C" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                                    </svg>
-                                </div>
-                            </div>
-                            {errors.manager && (
-                                <div className="error-message flex items-center mt-1.5 text-red-500">
-                                    <i className="fas fa-exclamation-circle text-xs mr-1.5"></i>
-                                    <span className="text-xs">{errors.manager}</span>
-                                </div>
-                            )}
-                        </div>
                     </div>
 
                     {/* Right Column */}
                     <div className="form-layout w-1/2">
-                        {/* Amount */}
+                        {/* Service Group Name */}
                         <div className="form-group mb-5">
                             <div className="flex items-center mb-2">
                                 <label className="form-label block text-sm font-medium text-gray-700">
-                                    Số tiền dự toán
+                                    Tên nhóm dịch vụ
                                 </label>
                                 <span className="text-red-500 font-bold ml-1">*</span>
                             </div>
@@ -361,11 +357,8 @@ const EstimatesPage = () => {
                                     value={formData.amount}
                                     onChange={handleChange}
                                     className={`w-full h-[43px] px-4 border ${errors.amount ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2D5016] focus:border-transparent`}
-                                    placeholder="Nhập số tiền dự toán"
+                                    placeholder="Nhập tên nhóm dịch vụ"
                                 />
-                                <div className="absolute right-4 top-1/2 -translate-y-1/2 font-medium text-gray-500">
-                                    VNĐ
-                                </div>
                             </div>
                             {errors.amount && (
                                 <div className="error-message flex items-center mt-1.5 text-red-500">
@@ -376,10 +369,10 @@ const EstimatesPage = () => {
                         </div>
 
                         {/* Executing Unit */}
-                        <div className="form-group mb-5">
+                        {/* <div className="form-group mb-5">
                             <div className="flex items-center mb-2">
                                 <label className="form-label block text-sm font-medium text-gray-700">
-                                    Đơn vị thực hiện
+                                    Trạng thái
                                 </label>
                             </div>
                             <div className="relative">
@@ -406,83 +399,29 @@ const EstimatesPage = () => {
                                     <span className="text-xs">{errors.executingUnit}</span>
                                 </div>
                             )}
-                        </div>
+                        </div> */}
 
-                        {/* Start Date */}
-                        <div className="form-group mb-5">
-                            <div className="flex items-center mb-2">
-                                <label className="form-label block text-sm font-medium text-gray-700">
-                                    Ngày bắt đầu
-                                </label>
-                                <span className="text-red-500 font-bold ml-1">*</span>
-                            </div>
-                            <div className="relative">
-                                <input
-                                    type="date"
-                                    name="startDate"
-                                    value={formData.startDate}
-                                    onChange={handleChange}
-                                    className={`w-full h-[43px] px-4 border ${errors.startDate ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2D5016] focus:border-transparent`}
-                                />
-                            </div>
-                            {errors.startDate && (
-                                <div className="error-message flex items-center mt-1.5 text-red-500">
-                                    <i className="fas fa-exclamation-circle text-xs mr-1.5"></i>
-                                    <span className="text-xs">{errors.startDate}</span>
-                                </div>
-                            )}
-                        </div>
-
-                        {/* End Date */}
-                        <div className="form-group">
-                            <div className="flex items-center mb-0">
-                                <label className="form-label block text-sm font-medium text-gray-700">
-                                    Ngày kết thúc
-                                </label>
-                                <span className="text-red-500 font-bold ml-1">*</span>
-                            </div>
-                            <div className="relative">
-                                <input
-                                    type="date"
-                                    name="endDate"
-                                    value={formData.endDate}
-                                    onChange={handleChange}
-                                    className={`w-full h-[43px] px-4 border ${errors.endDate ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2D5016] focus:border-transparent`}
-                                />
-                            </div>
-                            {errors.endDate && (
-                                <div className="error-message flex items-center mt-1.5 text-red-500">
-                                    <i className="fas fa-exclamation-circle text-xs mr-1.5"></i>
-                                    <span className="text-xs">{errors.endDate}</span>
-                                </div>
-                            )}
-                        </div>
                     </div>
-                </div>
-
-                {/* Notes - Full width */}
-                <div className="mt-5">
-                    <label className="form-label block text-sm font-medium text-gray-700 mb-2">
-                        Ghi chú
-                    </label>
-                    <textarea
-                        name="notes"
-                        value={formData.notes}
-                        onChange={handleChange}
-                        rows="1"
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2D5016] focus:border-transparent resize-none"
-                        placeholder="Nhập ghi chú..."
-                    ></textarea>
                 </div>
 
                 {/* Submit Button */}
                 <div className="submit-section flex justify-center mt-5">
                     <button
                         type="submit"
-                        className="px-5 py-3 bg-gradient-to-br from-[#2D5016] to-[#4A7C23] text-white font-bold rounded-lg flex items-center gap-2 cursor-pointer"
+                        disabled={loading}
+                        className="px-5 py-3 bg-gradient-to-br from-[#2D5016] to-[#4A7C23] text-white font-bold rounded-lg flex items-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                        <i className="fas fa-plus-circle"></i>
-                        <span>Tạo dự toán</span>
+                        {loading ? (
+                            <>
+                                <i className="fas fa-spinner fa-spin"></i>
+                                <span>Đang xử lý...</span>
+                            </>
+                        ) : (
+                            <>
+                                <i className="fas fa-plus-circle"></i>
+                                <span>Tạo nhóm DV</span>
+                            </>
+                        )}
                     </button>
                 </div>
             </form>
@@ -495,17 +434,27 @@ const EstimatesPage = () => {
                             <i className="fas fa-list text-[#2D5016] text-xl"></i>
                         </div>
                         <h2 className="text-xl font-semibold text-gray-800">
-                            Danh sách dự toán
+                            Danh sách nhóm dịch vụ
                         </h2>
                     </div>
                     <div className="search-section">
                         <div className="search-input relative">
                             <input
                                 type="text"
+                                value={searchText}
+                                onChange={(e) => setSearchText(e.target.value)}
                                 className="w-[400px] h-[42px] pl-12 pr-4 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2D5016]"
-                                placeholder="Tìm kiếm dự toán..."
+                                placeholder="Tìm kiếm theo mã, tên hoặc mô tả..."
                             />
                             <i className="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"></i>
+                            {searchText && (
+                                <button
+                                    onClick={() => setSearchText('')}
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                                >
+                                    <i className="fas fa-times"></i>
+                                </button>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -516,25 +465,19 @@ const EstimatesPage = () => {
                         <thead>
                             <tr className="bg-gray-50">
                                 <th className="px-4 py-5 text-xs font-semibold text-gray-500 uppercase tracking-wider text-left">
-                                    Mã dự toán
+                                    Mã nhóm DV
                                 </th>
                                 <th className="px-4 py-5 text-xs font-semibold text-gray-500 uppercase tracking-wider text-left">
-                                    Mã ngân sách
+                                    Tên nhóm DV
                                 </th>
                                 <th className="px-4 py-5 text-xs font-semibold text-gray-500 uppercase tracking-wider text-left">
-                                    Hạng mục
+                                    Mô tả
                                 </th>
-                                <th className="px-4 py-5 text-xs font-semibold text-gray-500 uppercase tracking-wider text-left">
-                                    Số tiền dự toán
-                                </th>
-                                <th className="px-4 py-5 text-xs font-semibold text-gray-500 uppercase tracking-wider text-left">
+                                {/* <th className="px-4 py-5 text-xs font-semibold text-gray-500 uppercase tracking-wider text-left">
                                     Trạng thái
-                                </th>
+                                </th> */}
                                 <th className="px-4 py-5 text-xs font-semibold text-gray-500 uppercase tracking-wider text-left">
-                                    Đơn vị thực hiện
-                                </th>
-                                <th className="px-4 py-5 text-xs font-semibold text-gray-500 uppercase tracking-wider text-left">
-                                    Chi tiết
+                                    Sửa
                                 </th>
                                 <th className="px-4 py-5 text-xs font-semibold text-gray-500 uppercase tracking-wider text-left">
                                     Xóa
@@ -542,62 +485,71 @@ const EstimatesPage = () => {
                             </tr>
                         </thead>
                         <tbody className="bg-white divide-y divide-gray-100">
-                            {mockEstimates.map((estimate) => {
-                                const statusBadge = getStatusBadge(estimate.status);
+                            {loading ? (
+                                <tr>
+                                    <td colSpan="5" className="px-4 py-8 text-center text-gray-500">
+                                        <i className="fas fa-spinner fa-spin mr-2"></i>
+                                        Đang tải dữ liệu...
+                                    </td>
+                                </tr>
+                            ) : filteredServiceGroups.length === 0 ? (
+                                <tr>
+                                    <td colSpan="5" className="px-4 py-8 text-center text-gray-500">
+                                        {searchText ? (
+                                            <>
+                                                <i className="fas fa-search mr-2"></i>
+                                                Không tìm thấy kết quả phù hợp với "{searchText}"
+                                            </>
+                                        ) : (
+                                            'Chưa có nhóm dịch vụ nào'
+                                        )}
+                                    </td>
+                                </tr>
+                            ) : (
+                                filteredServiceGroups.map((serviceGroup) => {
+                                    const statusBadge = getStatusBadge(serviceGroup.trangThai || serviceGroup.status);
 
-                                return (
-                                    <tr key={estimate.id} className="border-t border-gray-100">
-                                        <td className="px-4 py-4">
-                                            <div className="bg-gray-100 rounded-md px-2 py-1.5">
-                                                <span className="text-xs text-[#2D5016] font-normal">
-                                                    {estimate.id}...
-                                                </span>
-                                            </div>
-                                        </td>
-                                        <td className="px-4 py-4">
-                                            <div className="bg-blue-50 text-blue-700 rounded-md px-2 py-1 inline-block">
-                                                <span className="text-xs font-semibold">{estimate.budgetCode}</span>
-                                            </div>
-                                        </td>
-                                        <td className="px-4 py-4">
-                                            <span className="text-sm text-gray-800">{estimate.item}</span>
-                                        </td>
-                                        <td className="px-4 py-4">
-                                            <span className="text-sm font-bold text-gray-800">
-                                                {estimate.amount} ₫
-                                            </span>
-                                        </td>
-                                        <td className="px-4 py-4">
-                                            <div className={`${statusBadge.bg} ${statusBadge.text} rounded-md px-3 py-1 inline-block`}>
-                                                <span className="text-xs font-medium">{statusBadge.label}</span>
-                                            </div>
-                                        </td>
-                                        <td className="px-4 py-4">
-                                            <span className="text-sm text-gray-800">
-                                                {estimate.executingUnit}
-                                            </span>
-                                        </td>
-                                        <td className="px-4 py-4">
-                                            <button
-                                                onClick={() => handleViewDetail(estimate.id)}
-                                                className="border border-[#2D5016] rounded-md px-3 py-1.5 text-xs text-[#2D5016]"
-                                            >
-                                                Chi tiết
-                                            </button>
-                                        </td>
-                                        <td className="px-4 py-4">
-                                            <button
-                                                onClick={() => handleDelete(estimate.id)}
-                                                className="bg-red-500 text-white rounded-md p-1.5"
-                                            >
-                                                <svg width="12" height="14" viewBox="0 0 448 512" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-                                                    <path d="M135.2 17.7L128 32H32C14.3 32 0 46.3 0 64S14.3 96 32 96H416c17.7 0 32-14.3 32-32s-14.3-32-32-32H320l-7.2-14.3C307.4 6.8 296.3 0 284.2 0H163.8c-12.1 0-23.2 6.8-28.6 17.7zM416 128H32L53.2 467c1.6 25.3 22.6 45 47.9 45H346.9c25.3 0 46.3-19.7 47.9-45L416 128z" />
-                                                </svg>
-                                            </button>
-                                        </td>
-                                    </tr>
-                                );
-                            })}
+                                    return (
+                                        <tr key={serviceGroup.maNhomDichVu} className="border-t border-gray-100">
+                                            <td className="px-4 py-4">
+                                                <div className="bg-blue-50 text-blue-700 rounded-md px-2 py-1 inline-block">
+                                                    <span className="text-xs font-semibold">{serviceGroup.maNhomDichVu}</span>
+                                                </div>
+                                            </td>
+                                            <td className="px-4 py-4">
+                                                <span className="text-sm font-medium text-gray-800">{serviceGroup.tenNhomDichVu}</span>
+                                            </td>
+                                            <td className="px-4 py-4">
+                                                <span className="text-sm text-gray-600">{serviceGroup.moTa || '-'}</span>
+                                            </td>
+                                            {/* <td className="px-4 py-4">
+                                                <div className={`${statusBadge.bg} ${statusBadge.text} rounded-md px-3 py-1 inline-block`}>
+                                                    <span className="text-xs font-medium">{statusBadge.label}</span>
+                                                </div>
+                                            </td> */}
+                                            <td className="px-4 py-4">
+                                                <button
+                                                    onClick={() => handleEdit(serviceGroup)}
+                                                    className="border border-[#2D5016] rounded-md px-3 py-1.5 text-xs text-[#2D5016] hover:bg-[#2D5016] hover:text-white transition-colors"
+                                                >
+                                                    <i className="fas fa-edit mr-1"></i>
+                                                    Sửa
+                                                </button>
+                                            </td>
+                                            <td className="px-4 py-4">
+                                                <button
+                                                    onClick={() => handleDelete(serviceGroup.maNhomDichVu)}
+                                                    className="bg-red-500 text-white rounded-md p-1.5 hover:bg-red-600 transition-colors"
+                                                >
+                                                    <svg width="12" height="14" viewBox="0 0 448 512" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                                                        <path d="M135.2 17.7L128 32H32C14.3 32 0 46.3 0 64S14.3 96 32 96H416c17.7 0 32-14.3 32-32s-14.3-32-32-32H320l-7.2-14.3C307.4 6.8 296.3 0 284.2 0H163.8c-12.1 0-23.2 6.8-28.6 17.7zM416 128H32L53.2 467c1.6 25.3 22.6 45 47.9 45H346.9c25.3 0 46.3-19.7 47.9-45L416 128z" />
+                                                    </svg>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    );
+                                })
+                            )}
                         </tbody>
                     </table>
                 </div>
