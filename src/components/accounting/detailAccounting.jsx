@@ -106,12 +106,12 @@ const DetailAccountingPopup = ({ isOpen, onClose, receiptData, onAdvanceClick, o
                                     </div>
                                 </div>
 
-                                <div className="info-item border-b border-gray-200 pb-2 flex flex-row items-center justify-between">
+                                {/* <div className="info-item border-b border-gray-200 pb-2 flex flex-row items-center justify-between">
                                     <div className="text-sm text-gray-500">Tiền BN trả</div>
                                     <div className="font-bold text-green-600 mt-1">
                                         {receiptData?.patientPaid?.toLocaleString() || '200,000'} VNĐ
                                     </div>
-                                </div>
+                                </div> */}
 
                                 <div className="info-item border-b border-gray-200 pb-2 flex flex-row items-center justify-between">
                                     <div className="text-sm text-gray-500">Tỷ lệ bảo hiểm</div>
@@ -126,6 +126,51 @@ const DetailAccountingPopup = ({ isOpen, onClose, receiptData, onAdvanceClick, o
                                         {receiptData?.insuranceAmount?.toLocaleString() || '0'} VNĐ
                                     </div>
                                 </div>
+
+                                <div className="info-item border-b border-gray-200 pb-2 flex flex-row items-center justify-between">
+                                    <div className="text-sm text-gray-500">Đã tạm ứng</div>
+                                    <div className="font-bold text-blue-600 mt-1">
+                                        {(() => {
+                                            const tongTamUng = receiptData?.tamUngs?.reduce((sum, tu) => {
+                                                // Chỉ tính các tạm ứng không phải loại hoàn ứng (loaiTamUng !== 3 hoặc trangThai === 0)
+                                                if (tu.loaiTamUng === 3 && tu.trangThai === 3) return sum;
+                                                return sum + parseFloat(tu.soTien || 0);
+                                            }, 0) || 0;
+                                            return tongTamUng.toLocaleString();
+                                        })()} VNĐ
+                                    </div>
+                                </div>
+
+                                <div className="info-item border-b border-gray-200 pb-2 flex flex-row items-center justify-between">
+                                    <div className="text-sm text-gray-500">Đã hoàn ứng</div>
+                                    <div className="font-bold text-orange-600 mt-1">
+                                        {parseFloat(receiptData?.tongTienHoanUng || 0).toLocaleString()} VNĐ
+                                    </div>
+                                </div>
+
+                                {(() => {
+                                    const tongTien = parseFloat(receiptData?.tongTien || 0);
+                                    const tienBaoHiem = parseFloat(receiptData?.tienBaoHiem || 0);
+                                    const tongTamUng = receiptData?.tamUngs?.reduce((sum, tu) => {
+                                        if (tu.loaiTamUng === 3 && tu.trangThai === 3) return sum;
+                                        return sum + parseFloat(tu.soTien || 0);
+                                    }, 0) || 0;
+                                    const tongHoanUng = parseFloat(receiptData?.tongTienHoanUng || 0);
+                                    const conPhaiTra = tongTien - tienBaoHiem - tongTamUng + tongHoanUng;
+
+                                    return (
+                                        <div className={`info-item border-b border-gray-200 pb-2 flex flex-row items-center justify-between ${conPhaiTra < 0 ? 'bg-orange-50' : conPhaiTra > 0 ? 'bg-red-50' : 'bg-green-50'
+                                            } -mx-3 px-3 py-2 rounded`}>
+                                            <div className="text-sm font-semibold text-gray-700">
+                                                {conPhaiTra < 0 ? 'Cần hoàn lại cho BN' : conPhaiTra > 0 ? 'BN phải trả thêm' : 'Đã thanh toán đủ'}
+                                            </div>
+                                            <div className={`font-bold text-lg mt-1 ${conPhaiTra < 0 ? 'text-orange-700' : conPhaiTra > 0 ? 'text-red-700' : 'text-green-700'
+                                                }`}>
+                                                {Math.abs(conPhaiTra).toLocaleString()} VNĐ
+                                            </div>
+                                        </div>
+                                    );
+                                })()}
 
                                 <div className="info-item border-b border-gray-200 pb-2 flex flex-row items-center justify-between" >
                                     <div className="text-sm text-gray-500">Trạng thái</div>
@@ -223,30 +268,95 @@ const DetailAccountingPopup = ({ isOpen, onClose, receiptData, onAdvanceClick, o
                                     <div className="grid grid-cols-2 gap-3">
                                         <div className="flex justify-between">
                                             <span className="opacity-80">Tiền khám</span>
-                                            <span className="font-bold">200,000</span>
+                                            <span className="font-bold">{parseFloat(receiptData?.tienKham || 0).toLocaleString()}</span>
                                         </div>
                                         <div className="flex justify-between">
                                             <span className="opacity-80">Tiền thuốc</span>
-                                            <span className="font-bold">0</span>
+                                            <span className="font-bold">{parseFloat(receiptData?.tienThuoc || 0).toLocaleString()}</span>
                                         </div>
                                         <div className="flex justify-between">
                                             <span className="opacity-80">Tiền XN</span>
-                                            <span className="font-bold">0</span>
+                                            <span className="font-bold">{parseFloat(receiptData?.tienXetNghiem || 0).toLocaleString()}</span>
                                         </div>
                                         <div className="flex justify-between">
                                             <span className="opacity-80">Tiền giường</span>
-                                            <span className="font-bold">0</span>
+                                            <span className="font-bold">{parseFloat(receiptData?.tienGiuong || 0).toLocaleString()}</span>
                                         </div>
                                         <div className="flex justify-between">
                                             <span className="opacity-80">Tiền PT</span>
-                                            <span className="font-bold">0</span>
+                                            <span className="font-bold">{parseFloat(receiptData?.tienPhauThuat || 0).toLocaleString()}</span>
                                         </div>
                                         <div className="flex justify-between">
                                             <span className="opacity-80">Tiền khác</span>
-                                            <span className="font-bold">0</span>
+                                            <span className="font-bold">{parseFloat(receiptData?.tienKhac || 0).toLocaleString()}</span>
                                         </div>
                                     </div>
                                 </div>
+
+                                {/* Chi tiết tạm ứng */}
+                                {receiptData?.tamUngs && receiptData.tamUngs.filter(tu => !(tu.loaiTamUng === 3 && tu.trangThai === 3)).length > 0 && (
+                                    <div className="summary-box bg-blue-50 border border-blue-200 rounded-lg p-5">
+                                        <div className="title flex items-center gap-2 mb-4">
+                                            <i className="fas fa-wallet text-blue-600"></i>
+                                            <span className="font-semibold text-blue-900">Chi tiết tạm ứng</span>
+                                        </div>
+                                        <div className="space-y-2">
+                                            {receiptData.tamUngs
+                                                .filter(tu => !(tu.loaiTamUng === 3 && tu.trangThai === 3))
+                                                .map((tamUng, index) => (
+                                                    <div key={index} className="flex justify-between items-center bg-white p-3 rounded border border-blue-100">
+                                                        <div>
+                                                            <div className="text-sm font-semibold text-gray-800">{tamUng.maTamUng}</div>
+                                                            <div className="text-xs text-gray-500">
+                                                                {new Date(tamUng.ngayTamUng).toLocaleDateString('vi-VN')}
+                                                            </div>
+                                                            {tamUng.ghiChu && (
+                                                                <div className="text-xs text-gray-400 mt-1">{tamUng.ghiChu}</div>
+                                                            )}
+                                                        </div>
+                                                        <div className="text-right">
+                                                            <div className="font-bold text-blue-600">
+                                                                {parseFloat(tamUng.soTien).toLocaleString()} VNĐ
+                                                            </div>
+                                                            <div className="text-xs text-gray-500">
+                                                                Đã dùng: {parseFloat(tamUng.soTienDaSuDung || 0).toLocaleString()} VNĐ
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Chi tiết hoàn ứng */}
+                                {receiptData?.chiTietHoanUng && receiptData.chiTietHoanUng.length > 0 && (
+                                    <div className="summary-box bg-orange-50 border border-orange-200 rounded-lg p-5">
+                                        <div className="title flex items-center gap-2 mb-4">
+                                            <i className="fas fa-hand-holding-usd text-orange-600"></i>
+                                            <span className="font-semibold text-orange-900">Chi tiết hoàn ứng</span>
+                                        </div>
+                                        <div className="space-y-2">
+                                            {receiptData.chiTietHoanUng.map((hoanUng, index) => (
+                                                <div key={index} className="flex justify-between items-center bg-white p-3 rounded border border-orange-100">
+                                                    <div>
+                                                        <div className="text-sm font-semibold text-gray-800">{hoanUng.maTamUng}</div>
+                                                        <div className="text-xs text-gray-500">
+                                                            {new Date(hoanUng.ngayHoan).toLocaleDateString('vi-VN')}
+                                                        </div>
+                                                        {hoanUng.ghiChu && (
+                                                            <div className="text-xs text-gray-400 mt-1">{hoanUng.ghiChu}</div>
+                                                        )}
+                                                    </div>
+                                                    <div className="text-right">
+                                                        <div className="font-bold text-orange-600">
+                                                            -{parseFloat(hoanUng.soTienHoan).toLocaleString()} VNĐ
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </div>
@@ -254,35 +364,61 @@ const DetailAccountingPopup = ({ isOpen, onClose, receiptData, onAdvanceClick, o
 
                 {/* Modal Footer */}
                 <div className="modal-footer bg-[#F9FAFB] border-t border-gray-200 p-6 flex-shrink-0">
-                    <div className="flex flex-wrap justify-between gap-4">
-                        <div className="flex flex-wrap gap-2">
-                            <button className="px-5 py-3 bg-gradient-to-br from-[#DC2626] to-[#B91C1C] text-white font-bold rounded-lg flex items-center gap-2">
-                                <i className="fas fa-times-circle"></i>
-                                <span>Hủy/Hoàn biên lai</span>
-                            </button>
-                            <button
-                                onClick={handleAdvanceClick}
-                                className="px-5 py-3 bg-gradient-to-br from-[#F59E0B] to-[#D97706] text-white font-bold rounded-lg flex items-center gap-2"
-                            >
-                                <i className="fas fa-wallet"></i>
-                                <span>Tạm ứng</span>
-                            </button>
-                            <button
-                                onClick={handleCompleteClick}
-                                className="px-5 py-3 bg-gradient-to-br from-[#3B82F6] to-[#2563EB] text-white font-bold rounded-lg flex items-center gap-2"
-                            >
-                                <i className="fas fa-hand-holding-usd"></i>
-                                <span>Hoàn ứng</span>
-                            </button>
-                        </div>
-                        <button
-                            onClick={handlePaymentClick}
-                            className="px-5 py-3 bg-gradient-to-br from-[#2D5016] to-[#4A7C23] text-white font-bold rounded-lg flex items-center gap-2"
-                        >
-                            <i className="fas fa-check-circle"></i>
-                            <span>Thanh toán ra viện</span>
-                        </button>
-                    </div>
+                    {(() => {
+                        const tongTien = parseFloat(receiptData?.tongTien || 0);
+                        const tienBaoHiem = parseFloat(receiptData?.tienBaoHiem || 0);
+                        const tongTamUng = receiptData?.tamUngs?.reduce((sum, tu) => {
+                            if (tu.loaiTamUng === 3 && tu.trangThai === 3) return sum;
+                            return sum + parseFloat(tu.soTien || 0);
+                        }, 0) || 0;
+                        const tongHoanUng = parseFloat(receiptData?.tongTienHoanUng || 0);
+                        const conPhaiTra = tongTien - tienBaoHiem - tongTamUng + tongHoanUng;
+
+                        return (
+                            <div className="flex flex-wrap justify-between gap-4">
+                                <div className="flex flex-wrap gap-2">
+                                    <button className="px-5 py-3 bg-gradient-to-br from-[#DC2626] to-[#B91C1C] text-white font-bold rounded-lg flex items-center gap-2">
+                                        <i className="fas fa-times-circle"></i>
+                                        <span>Hủy/Hoàn biên lai</span>
+                                    </button>
+                                    <button
+                                        onClick={handleAdvanceClick}
+                                        className="px-5 py-3 bg-gradient-to-br from-[#F59E0B] to-[#D97706] text-white font-bold rounded-lg flex items-center gap-2"
+                                    >
+                                        <i className="fas fa-wallet"></i>
+                                        <span>Tạm ứng</span>
+                                    </button>
+                                </div>
+                                <div className="flex gap-2">
+                                    {/* Hiển thị nút Hoàn ứng nếu cần hoàn lại tiền */}
+                                    {conPhaiTra < 0 && (
+                                        <button
+                                            onClick={handleCompleteClick}
+                                            className="px-5 py-3 bg-gradient-to-br from-[#F59E0B] to-[#D97706] text-white font-bold rounded-lg flex items-center gap-2"
+                                        >
+                                            <i className="fas fa-hand-holding-usd"></i>
+                                            <span>Hoàn ứng {Math.abs(conPhaiTra).toLocaleString()} VNĐ</span>
+                                        </button>
+                                    )}
+                                    {/* Hiển thị nút Thanh toán nếu BN cần trả thêm hoặc đã đủ */}
+                                    {conPhaiTra >= 0 && (
+                                        <button
+                                            onClick={handlePaymentClick}
+                                            className="px-5 py-3 bg-gradient-to-br from-[#2D5016] to-[#4A7C23] text-white font-bold rounded-lg flex items-center gap-2"
+                                        >
+                                            <i className="fas fa-check-circle"></i>
+                                            <span>
+                                                {conPhaiTra > 0
+                                                    ? `Thu thêm ${conPhaiTra.toLocaleString()} VNĐ`
+                                                    : 'Hoàn tất thanh toán'
+                                                }
+                                            </span>
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                        );
+                    })()}
                 </div>
             </div>
         </div>

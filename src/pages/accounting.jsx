@@ -741,11 +741,23 @@ const AccountingPage = () => {
                                                         totalAmount: parseFloat(receipt.tongTien),
                                                         tongTien: receipt.tongTien,
                                                         patientPaid: parseFloat(receipt.tienBenhNhanTra),
+                                                        tienBenhNhanTra: receipt.tienBenhNhanTra,
                                                         insuranceRate: `${receipt.tyLeBaoHiem}%`,
                                                         insuranceAmount: parseFloat(receipt.tienBaoHiem),
+                                                        tienBaoHiem: receipt.tienBaoHiem,
                                                         status: receipt.trangThaiThanhToan === 1 ? 'paid' : 'unpaid',
                                                         note: receipt.ghiChu || '',
-                                                        tamUngs: receipt.tamUngs || [], // Thêm dữ liệu tạm ứng
+                                                        // Thêm các trường chi phí
+                                                        tienKham: receipt.tienKham || 0,
+                                                        tienThuoc: receipt.tienThuoc || 0,
+                                                        tienXetNghiem: receipt.tienXetNghiem || 0,
+                                                        tienGiuong: receipt.tienGiuong || 0,
+                                                        tienPhauThuat: receipt.tienPhauThuat || 0,
+                                                        tienKhac: receipt.tienKhac || 0,
+                                                        // Thêm dữ liệu tạm ứng và hoàn ứng
+                                                        tamUngs: receipt.tamUngs || [],
+                                                        tongTienHoanUng: receipt.tongTienHoanUng || 0,
+                                                        chiTietHoanUng: receipt.chiTietHoanUng || [],
                                                         services: receipt.chiTietVienPhi?.map(detail => ({
                                                             code: detail.maDichVu,
                                                             quantity: parseFloat(detail.soLuong),
