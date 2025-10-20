@@ -7,8 +7,10 @@ const CompleteAccountingPopup = ({ isOpen, onClose, recordData }) => {
     // Form states
     const [formData, setFormData] = useState({
         recordCode: recordData?.recordCode || 'HS001',
-        advanceCode: '', // Thêm mã tạm ứng
-        amount: 0,
+        advanceCode: recordData?.advanceCode || '', // Mã tạm ứng
+        advancedAmount: recordData?.advancedAmount || 0, // Số tiền đã tạm ứng
+        usedAmount: recordData?.usedAmount || 0, // Số tiền đã sử dụng
+        amount: 0, // Số tiền hoàn ứng
         notes: ''
     });
 
@@ -25,12 +27,21 @@ const CompleteAccountingPopup = ({ isOpen, onClose, recordData }) => {
         isValid: true
     });
 
-    // Update record code when recordData changes
+    // Update form data when recordData changes
     useEffect(() => {
-        if (recordData && recordData.recordCode) {
+        if (recordData) {
             setFormData(prev => ({
                 ...prev,
-                recordCode: recordData.recordCode
+                recordCode: recordData.recordCode || prev.recordCode,
+                advanceCode: recordData.advanceCode || '',
+                advancedAmount: recordData.advancedAmount || 0,
+                usedAmount: recordData.usedAmount || 0
+            }));
+
+            setPreviewData(prev => ({
+                ...prev,
+                totalAmount: recordData.totalAmount || prev.totalAmount,
+                advancedAmount: recordData.advancedAmount || 0
             }));
         }
     }, [recordData]);
@@ -54,9 +65,11 @@ const CompleteAccountingPopup = ({ isOpen, onClose, recordData }) => {
 
     // Validate form before submission
     const validateForm = () => {
+        const maxRefundAmount = formData.advancedAmount - formData.usedAmount;
+
         const newErrors = {
             advanceCode: !formData.advanceCode,
-            amount: formData.amount <= 0
+            amount: formData.amount <= 0 || formData.amount > maxRefundAmount
         };
 
         setErrors(newErrors);
@@ -154,17 +167,43 @@ const CompleteAccountingPopup = ({ isOpen, onClose, recordData }) => {
                                     type="text"
                                     name="advanceCode"
                                     value={formData.advanceCode}
-                                    onChange={handleChange}
-                                    placeholder="Nhập mã tạm ứng"
-                                    className={`w-full p-3 bg-[#F9FAFB] border ${errors.advanceCode ? 'border-red-500' : 'border-gray-200'} rounded-lg text-gray-700 focus:outline-none focus:border-[#2D5016]`}
+                                    readOnly
+                                    className="w-full p-3 bg-[#F9FAFB] border border-gray-200 rounded-lg text-gray-500 focus:outline-none cursor-not-allowed"
                                 />
                             </div>
                             {errors.advanceCode && (
                                 <div className="error-message flex items-center mt-1.5 text-red-500">
                                     <i className="fas fa-exclamation-circle text-xs mr-1.5"></i>
-                                    <span className="text-xs">Vui lòng nhập mã tạm ứng</span>
+                                    <span className="text-xs">Không có mã tạm ứng</span>
                                 </div>
                             )}
+                            <p className="text-xs text-gray-500 mt-1">
+                                <i className="fas fa-info-circle mr-1"></i>
+                                Tự động điền từ biên lai
+                            </p>
+                        </div>
+
+                        {/* Số tiền đã tạm ứng */}
+                        <div className="form-group">
+                            <label className="block text-sm font-semibold text-gray-700 mb-1.5">
+                                Số tiền đã tạm ứng
+                            </label>
+                            <div className="relative flex items-center">
+                                <input
+                                    type="text"
+                                    value={formData.advancedAmount.toLocaleString()}
+                                    readOnly
+                                    className="w-full p-3 bg-[#F9FAFB] border border-gray-200 rounded-lg text-gray-500 focus:outline-none cursor-not-allowed"
+                                />
+                                <div className="absolute right-3 font-semibold text-gray-500">
+                                    VNĐ
+                                </div>
+                            </div>
+                            <p className="text-xs text-gray-500 mt-1">
+                                <i className="fas fa-info-circle mr-1"></i>
+                                Đã sử dụng: {formData.usedAmount.toLocaleString()} VNĐ |
+                                Còn lại: {(formData.advancedAmount - formData.usedAmount).toLocaleString()} VNĐ
+                            </p>
                         </div>
 
                         {/* Số tiền hoàn ứng */}
@@ -181,6 +220,7 @@ const CompleteAccountingPopup = ({ isOpen, onClose, recordData }) => {
                                     name="amount"
                                     value={formData.amount}
                                     onChange={handleChange}
+                                    max={formData.advancedAmount - formData.usedAmount}
                                     className={`w-full p-3 bg-[#F9FAFB] border ${errors.amount ? 'border-red-500' : 'border-gray-200'} rounded-lg text-gray-700 focus:outline-none focus:border-[#2D5016]`}
                                 />
                                 <div className="absolute right-3 font-semibold text-gray-500">
@@ -190,7 +230,12 @@ const CompleteAccountingPopup = ({ isOpen, onClose, recordData }) => {
                             {errors.amount && (
                                 <div className="error-message flex items-center mt-1.5 text-red-500">
                                     <i className="fas fa-exclamation-circle text-xs mr-1.5"></i>
-                                    <span className="text-xs">Số tiền phải lớn hơn 0</span>
+                                    <span className="text-xs">
+                                        {formData.amount <= 0
+                                            ? 'Số tiền phải lớn hơn 0'
+                                            : `Số tiền không được vượt quá ${(formData.advancedAmount - formData.usedAmount).toLocaleString()} VNĐ`
+                                        }
+                                    </span>
                                 </div>
                             )}
                         </div>
@@ -266,7 +311,10 @@ CompleteAccountingPopup.propTypes = {
     recordData: PropTypes.shape({
         recordCode: PropTypes.string,
         totalAmount: PropTypes.number,
-        advancedAmount: PropTypes.number
+        advanceCode: PropTypes.string,
+        advancedAmount: PropTypes.number,
+        usedAmount: PropTypes.number,
+        tamUngs: PropTypes.array
     })
 };
 
@@ -274,7 +322,10 @@ CompleteAccountingPopup.defaultProps = {
     recordData: {
         recordCode: 'HS001',
         totalAmount: 200000,
-        advancedAmount: 0
+        advanceCode: '',
+        advancedAmount: 0,
+        usedAmount: 0,
+        tamUngs: []
     }
 };
 

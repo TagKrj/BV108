@@ -11,6 +11,12 @@ const ACCOUNTING_ENDPOINTS = {
   CREATE_RECEIPT: "/hospital-fee/bien-lai",
   CANCEL_RECEIPT: (id) => `/hospital-fee/bien-lai/${id}/huy`,
 
+  // Bệnh án
+  MEDICAL_RECORDS: "/benhan",
+
+  // Dịch vụ
+  SERVICES: "/dichvu",
+
   // Tạm ứng
   ADVANCE_PAYMENT: "/hospital-fee/tam-ung",
 
@@ -55,6 +61,34 @@ class AccountingService {
       ACCOUNTING_ENDPOINTS.CREATE_RECEIPT,
       receiptData
     );
+  }
+
+  /**
+   * Lấy danh sách bệnh án (hồ sơ bệnh nhân)
+   * @param {Object} params - Query parameters
+   * @returns {Promise} Medical records list
+   */
+  async getMedicalRecords(params = {}) {
+    const queryString = new URLSearchParams(params).toString();
+    const endpoint = queryString
+      ? `${ACCOUNTING_ENDPOINTS.MEDICAL_RECORDS}?${queryString}`
+      : ACCOUNTING_ENDPOINTS.MEDICAL_RECORDS;
+
+    return await apiClient.get(endpoint);
+  }
+
+  /**
+   * Lấy danh sách dịch vụ
+   * @param {Object} params - Query parameters
+   * @returns {Promise} Services list
+   */
+  async getServices(params = {}) {
+    const queryString = new URLSearchParams(params).toString();
+    const endpoint = queryString
+      ? `${ACCOUNTING_ENDPOINTS.SERVICES}?${queryString}`
+      : ACCOUNTING_ENDPOINTS.SERVICES;
+
+    return await apiClient.get(endpoint);
   }
 
   /**

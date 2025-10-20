@@ -209,3 +209,95 @@ export const useDischargePayment = () => {
     createDischargePayment,
   };
 };
+
+/**
+ * Hook để quản lý bệnh án (hồ sơ bệnh nhân)
+ */
+export const useMedicalRecords = () => {
+  const [medicalRecords, setMedicalRecords] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  /**
+   * Lấy danh sách bệnh án
+   */
+  const fetchMedicalRecords = useCallback(async (params = {}) => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const response = await accountingService.getMedicalRecords(params);
+
+      // API trả về trực tiếp mảng data
+      if (Array.isArray(response)) {
+        setMedicalRecords(response);
+      } else if (response.data && Array.isArray(response.data)) {
+        setMedicalRecords(response.data);
+      } else {
+        setMedicalRecords([]);
+      }
+
+      return response;
+    } catch (err) {
+      setError(err.message || "Không thể tải danh sách bệnh án");
+      console.error("Error fetching medical records:", err);
+      setMedicalRecords([]);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  return {
+    medicalRecords,
+    loading,
+    error,
+    fetchMedicalRecords,
+  };
+};
+
+/**
+ * Hook để quản lý dịch vụ
+ */
+export const useServices = () => {
+  const [services, setServices] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  /**
+   * Lấy danh sách dịch vụ
+   */
+  const fetchServices = useCallback(async (params = {}) => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const response = await accountingService.getServices(params);
+
+      // API trả về trực tiếp mảng data
+      if (Array.isArray(response)) {
+        setServices(response);
+      } else if (response.data && Array.isArray(response.data)) {
+        setServices(response.data);
+      } else {
+        setServices([]);
+      }
+
+      return response;
+    } catch (err) {
+      setError(err.message || "Không thể tải danh sách dịch vụ");
+      console.error("Error fetching services:", err);
+      setServices([]);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  return {
+    services,
+    loading,
+    error,
+    fetchServices,
+  };
+};

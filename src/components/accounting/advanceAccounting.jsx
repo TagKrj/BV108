@@ -161,10 +161,9 @@ const AdvanceAccountingPopup = ({ isOpen, onClose, recordData }) => {
                                     className={`w-full p-3 bg-[#F9FAFB] border ${errors.advanceType ? 'border-red-500' : 'border-gray-200'} rounded-lg text-gray-700 focus:outline-none focus:border-[#2D5016] appearance-none`}
                                 >
                                     <option value="">-- Chọn loại tạm ứng --</option>
-                                    <option value="examination">Khám bệnh</option>
-                                    <option value="treatment">Điều trị</option>
-                                    <option value="surgery">Phẫu thuật</option>
-                                    <option value="other">Khác</option>
+                                    <option value="1">Ngoại trú</option>
+                                    <option value="2">Nội trú</option>
+                                    <option value="3">Ứng trước</option>
                                 </select>
                                 <div className="absolute inset-y-0 right-0 flex items-center px-3 pointer-events-none">
                                     <i className="fas fa-chevron-down text-gray-500"></i>

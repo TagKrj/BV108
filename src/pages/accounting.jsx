@@ -3,11 +3,27 @@ import DetailAccountingPopup from '../components/accounting/detailAccounting';
 import AdvanceAccountingPopup from '../components/accounting/advanceAccounting';
 import CompleteAccountingPopup from '../components/accounting/completeAccounting';
 import PayAccountingPopup from '../components/accounting/payAccounting';
-import { useReceipts } from '../hooks/useAccounting';
+import { useReceipts, useMedicalRecords, useServices } from '../hooks/useAccounting';
 
 const AccountingPage = () => {
     // Sử dụng custom hook để quản lý danh sách biên lai
     const { receipts, loading, error, fetchReceipts, createReceipt } = useReceipts();
+
+    // Sử dụng custom hook để quản lý danh sách bệnh án
+    const {
+        medicalRecords,
+        loading: loadingRecords,
+        error: errorRecords,
+        fetchMedicalRecords
+    } = useMedicalRecords();
+
+    // Sử dụng custom hook để quản lý danh sách dịch vụ
+    const {
+        services: servicesList,
+        loading: loadingServices,
+        error: errorServices,
+        fetchServices
+    } = useServices();
 
     // State for receipt detail popup
     const [showDetailPopup, setShowDetailPopup] = useState(false);
@@ -37,10 +53,23 @@ const AccountingPage = () => {
     // State loading riêng cho form submit
     const [submitting, setSubmitting] = useState(false);
 
+    // State cho tìm kiếm
+    const [searchTerm, setSearchTerm] = useState('');
+
     // Load danh sách biên lai khi component mount
     useEffect(() => {
         fetchReceipts();
     }, [fetchReceipts]);
+
+    // Load danh sách bệnh án khi component mount
+    useEffect(() => {
+        fetchMedicalRecords();
+    }, [fetchMedicalRecords]);
+
+    // Load danh sách dịch vụ khi component mount
+    useEffect(() => {
+        fetchServices();
+    }, [fetchServices]);
 
     // Helper function: Format số tiền
     const formatCurrency = (amount) => {
@@ -152,6 +181,58 @@ const AccountingPage = () => {
         }));
     };
 
+    // Xử lý khi chọn mã hồ sơ
+    const handleRecordCodeChange = (e) => {
+        const selectedRecordCode = e.target.value;
+
+        // Tìm bệnh án được chọn
+        const selectedRecord = medicalRecords.find(record => record.maHoSo === selectedRecordCode);
+
+        if (selectedRecord) {
+            // Auto-fill loại hồ sơ (1: Nội trú, 2: Ngoại trú - theo backend)
+            const recordType = selectedRecord.loaiHoSo === 1 ? 'ngoai-tru' : 'noi-tru';
+
+            setFormData(prev => ({
+                ...prev,
+                recordCode: selectedRecordCode,
+                recordType: recordType,
+                patientCode: selectedRecord.maBenhNhan // Cũng auto-fill mã bệnh nhân
+            }));
+        } else {
+            setFormData(prev => ({
+                ...prev,
+                recordCode: selectedRecordCode
+            }));
+        }
+    };
+
+    // Xử lý khi chọn dịch vụ
+    const handleServiceChange = (e) => {
+        const selectedServiceCode = e.target.value;
+
+        // Tìm dịch vụ được chọn
+        const selectedService = servicesList.find(service => service.maDichVu === selectedServiceCode);
+
+        if (selectedService) {
+            // Auto-fill số lượng (mặc định là 1), đơn giá, và tỷ lệ bảo hiểm
+            setFormData(prev => ({
+                ...prev,
+                serviceCode: selectedServiceCode,
+                quantity: '1', // Mặc định số lượng là 1
+                unitPrice: selectedService.donGia,
+                insuranceRate: selectedService.tyLeBaoHiem || '0'
+            }));
+        } else {
+            setFormData(prev => ({
+                ...prev,
+                serviceCode: selectedServiceCode,
+                quantity: '',
+                unitPrice: '',
+                insuranceRate: ''
+            }));
+        }
+    };
+
     // Xử lý thêm dịch vụ
     const handleAddService = () => {
         // Kiểm tra dữ liệu hợp lệ
@@ -160,13 +241,21 @@ const AccountingPage = () => {
             return;
         }
 
-        // Tính thành tiền
-        const amount = parseFloat(formData.quantity) * parseFloat(formData.unitPrice);
+        // Tìm tên dịch vụ
+        const selectedService = servicesList.find(service => service.maDichVu === formData.serviceCode);
+        const serviceName = selectedService ? selectedService.tenDichVu : formData.serviceCode;
+
+        // Tính thành tiền = Số lượng × Đơn giá × (Tỷ lệ BH / 100)
+        const quantity = parseFloat(formData.quantity);
+        const unitPrice = parseFloat(formData.unitPrice);
+        const insuranceRate = parseFloat(formData.insuranceRate || 0);
+        const amount = quantity * unitPrice * (insuranceRate / 100);
 
         // Thêm dịch vụ vào danh sách
         const newService = {
             id: Date.now(), // ID tạm thời
             serviceCode: formData.serviceCode,
+            serviceName: serviceName, // Thêm tên dịch vụ để hiển thị
             quantity: formData.quantity,
             unitPrice: formData.unitPrice,
             insuranceRate: formData.insuranceRate || 0,
@@ -210,11 +299,19 @@ const AccountingPage = () => {
 
     // Xử lý hiển thị popup hoàn ứng
     const handleCompleteClick = (receipt) => {
+        // Lấy thông tin tạm ứng đầu tiên (hoặc tìm tạm ứng chưa sử dụng hết)
+        const tamUng = receipt.tamUngs && receipt.tamUngs.length > 0
+            ? receipt.tamUngs[0]
+            : null;
+
         // Tạo dữ liệu cho popup hoàn ứng từ thông tin biên lai
         const recordData = {
-            recordCode: receipt.recordCode,
-            totalAmount: receipt.totalAmount,
-            advancedAmount: 50000 // Giả định đã có tạm ứng trước đó
+            recordCode: receipt.recordCode || receipt.maHoSo,
+            totalAmount: receipt.totalAmount || parseFloat(receipt.tongTien),
+            advanceCode: tamUng ? tamUng.maTamUng : '',
+            advancedAmount: tamUng ? parseFloat(tamUng.soTien) : 0,
+            usedAmount: tamUng ? parseFloat(tamUng.soTienDaSuDung || 0) : 0,
+            tamUngs: receipt.tamUngs || [] // Truyền toàn bộ danh sách tạm ứng
         };
         setSelectedRecord(recordData);
         setShowCompletePopup(true);
@@ -231,6 +328,34 @@ const AccountingPage = () => {
         setSelectedRecord(recordData);
         setShowPayPopup(true);
     };
+
+    // Xử lý tìm kiếm
+    const handleSearchChange = (e) => {
+        setSearchTerm(e.target.value);
+    };
+
+    // Filter receipts dựa trên searchTerm
+    const filteredReceipts = receipts.filter(receipt => {
+        if (!searchTerm.trim()) return true;
+
+        const searchLower = searchTerm.toLowerCase().trim();
+
+        // Tìm kiếm theo các trường
+        return (
+            // Mã viện phí
+            receipt.maVienPhi?.toLowerCase().includes(searchLower) ||
+            // Mã hồ sơ
+            receipt.maHoSo?.toLowerCase().includes(searchLower) ||
+            // Tiền bệnh nhân trả
+            receipt.tienBenhNhanTra?.toString().includes(searchLower) ||
+            // Tổng tiền
+            receipt.tongTien?.toString().includes(searchLower) ||
+            // Ngày tạo (format)
+            formatDate(receipt.ngayTao).includes(searchLower) ||
+            // Trạng thái (tìm theo text hiển thị)
+            getPaymentStatus(receipt.trangThaiThanhToan).label.toLowerCase().includes(searchLower)
+        );
+    });
 
     return (
         <div className="accounting-page">
@@ -258,15 +383,31 @@ const AccountingPage = () => {
                                     Mã hồ sơ <span className="text-red-500">*</span>
                                 </label>
                                 <div className="relative">
-                                    <input
-                                        type="text"
+                                    <select
                                         name="recordCode"
                                         value={formData.recordCode}
-                                        onChange={handleInputChange}
-                                        placeholder="Nhập mã hồ sơ"
-                                        className="w-full h-[43px] px-4 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2D5016] focus:border-transparent"
-                                    />
+                                        onChange={handleRecordCodeChange}
+                                        className="w-full h-[43px] px-4 border border-gray-300 rounded-lg appearance-none focus:outline-none focus:ring-2 focus:ring-[#2D5016] focus:border-transparent bg-white"
+                                        disabled={loadingRecords}
+                                    >
+                                        <option value="">
+                                            {loadingRecords ? 'Đang tải...' : 'Chọn mã hồ sơ'}
+                                        </option>
+                                        {medicalRecords.map((record) => (
+                                            <option key={record.maHoSo} value={record.maHoSo}>
+                                                {record.maHoSo} - {record.maBenhNhan} ({record.loaiHoSo === 1 ? 'Ngoại trú' : 'Nội trú'})
+                                            </option>
+                                        ))}
+                                    </select>
+                                    <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
+                                        <svg width="12" height="6" viewBox="0 0 12 6" fill="none">
+                                            <path d="M1 1L6 5L11 1" stroke="#8C8C8C" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                                        </svg>
+                                    </div>
                                 </div>
+                                {errorRecords && (
+                                    <p className="text-red-500 text-xs mt-1">{errorRecords}</p>
+                                )}
                             </div>
 
                             {/* Form Group 2 - Loại hồ sơ */}
@@ -279,7 +420,8 @@ const AccountingPage = () => {
                                         name="recordType"
                                         value={formData.recordType}
                                         onChange={handleInputChange}
-                                        className="w-full h-[43px] px-4 border border-gray-300 rounded-lg appearance-none focus:outline-none focus:ring-2 focus:ring-[#2D5016] focus:border-transparent bg-white"
+                                        disabled={true}
+                                        className="w-full h-[43px] px-4 border border-gray-300 rounded-lg appearance-none focus:outline-none focus:ring-2 focus:ring-[#2D5016] focus:border-transparent bg-gray-100 cursor-not-allowed"
                                     >
                                         <option value="">Chọn loại hồ sơ</option>
                                         <option value="ngoai-tru">Ngoại trú</option>
@@ -291,6 +433,10 @@ const AccountingPage = () => {
                                         </svg>
                                     </div>
                                 </div>
+                                <p className="text-xs text-gray-500 mt-1">
+                                    <i className="fas fa-info-circle mr-1"></i>
+                                    Tự động điền khi chọn mã hồ sơ
+                                </p>
                             </div>
 
                             {/* Form Group 3 - Ghi chú */}
@@ -315,21 +461,37 @@ const AccountingPage = () => {
 
                             {/* Service Row - Dịch vụ, Số lượng, Đơn giá */}
                             <div className="service-row flex flex-wrap gap-4">
-                                {/* Form Group - Mã dịch vụ */}
+                                {/* Form Group - Mã dịch vụ (Dropdown) */}
                                 <div className="form-group">
                                     <label className="form-label block text-sm font-medium text-gray-700 mb-2">
-                                        Mã dịch vụ <span className="text-red-500">*</span>
+                                        Dịch vụ <span className="text-red-500">*</span>
                                     </label>
                                     <div className="relative">
-                                        <input
-                                            type="text"
+                                        <select
                                             name="serviceCode"
                                             value={formData.serviceCode}
-                                            onChange={handleInputChange}
-                                            placeholder="Nhập mã DV"
-                                            className="w-[120px] h-[43px] px-4 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2D5016] focus:border-transparent bg-white"
-                                        />
+                                            onChange={handleServiceChange}
+                                            className="w-[200px] h-[43px] px-4 border border-gray-300 rounded-lg appearance-none focus:outline-none focus:ring-2 focus:ring-[#2D5016] focus:border-transparent bg-white"
+                                            disabled={loadingServices}
+                                        >
+                                            <option value="">
+                                                {loadingServices ? 'Đang tải...' : 'Chọn dịch vụ'}
+                                            </option>
+                                            {servicesList.map((service) => (
+                                                <option key={service.maDichVu} value={service.maDichVu}>
+                                                    {service.tenDichVu}
+                                                </option>
+                                            ))}
+                                        </select>
+                                        <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
+                                            <svg width="12" height="6" viewBox="0 0 12 6" fill="none">
+                                                <path d="M1 1L6 5L11 1" stroke="#8C8C8C" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                                            </svg>
+                                        </div>
                                     </div>
+                                    {errorServices && (
+                                        <p className="text-red-500 text-xs mt-1">{errorServices}</p>
+                                    )}
                                 </div>
 
                                 {/* Form Group - Số lượng */}
@@ -343,6 +505,7 @@ const AccountingPage = () => {
                                         value={formData.quantity}
                                         onChange={handleInputChange}
                                         placeholder="SL"
+                                        min="1"
                                         className="w-[70px] h-[43px] px-4 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2D5016] focus:border-transparent bg-white"
                                     />
                                 </div>
@@ -358,8 +521,13 @@ const AccountingPage = () => {
                                         value={formData.unitPrice}
                                         onChange={handleInputChange}
                                         placeholder="Đơn giá"
-                                        className="w-[100px] h-[43px] px-4 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2D5016] focus:border-transparent bg-white"
+                                        className="w-[120px] h-[43px] px-4 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2D5016] focus:border-transparent bg-gray-100 cursor-not-allowed"
+                                        disabled={true}
                                     />
+                                    <p className="text-xs text-gray-500 mt-1">
+                                        <i className="fas fa-info-circle mr-1"></i>
+                                        Tự động điền
+                                    </p>
                                 </div>
 
                                 {/* Form Group - Tỷ lệ BH */}
@@ -375,8 +543,13 @@ const AccountingPage = () => {
                                         placeholder="0"
                                         min="0"
                                         max="100"
-                                        className="w-[80px] h-[43px] px-4 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2D5016] focus:border-transparent bg-white"
+                                        className="w-[80px] h-[43px] px-4 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2D5016] focus:border-transparent bg-gray-100 cursor-not-allowed"
+                                        disabled={true}
                                     />
+                                    <p className="text-xs text-gray-500 mt-1">
+                                        <i className="fas fa-info-circle mr-1"></i>
+                                        Tự động điền
+                                    </p>
                                 </div>
 
                                 {/* Button - Thêm dịch vụ */}
@@ -460,9 +633,16 @@ const AccountingPage = () => {
                         <div className="w-6 h-6 flex items-center justify-center">
                             <i className="fas fa-list text-[#2D5016] text-xl"></i>
                         </div>
-                        <h2 className="text-xl font-semibold text-gray-800">
-                            Danh sách biên lai viện phí
-                        </h2>
+                        <div>
+                            <h2 className="text-xl font-semibold text-gray-800">
+                                Danh sách biên lai viện phí
+                            </h2>
+                            {searchTerm && (
+                                <p className="text-xs text-gray-500 mt-1">
+                                    Tìm thấy {filteredReceipts.length} kết quả cho "{searchTerm}"
+                                </p>
+                            )}
+                        </div>
                     </div>
 
                     {/* Search Input */}
@@ -470,12 +650,22 @@ const AccountingPage = () => {
                         <div className="relative w-[400px]">
                             <input
                                 type="text"
+                                value={searchTerm}
+                                onChange={handleSearchChange}
                                 className="w-full h-[42px] pl-10 pr-4 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#2D5016] focus:border-transparent"
-                                placeholder="Tìm kiếm biên lai..."
+                                placeholder="Tìm kiếm mã viện phí, mã hồ sơ, trạng thái..."
                             />
                             <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
                                 <i className="fas fa-search"></i>
                             </div>
+                            {searchTerm && (
+                                <button
+                                    onClick={() => setSearchTerm('')}
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                                >
+                                    <i className="fas fa-times"></i>
+                                </button>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -509,15 +699,15 @@ const AccountingPage = () => {
                                         {error}
                                     </td>
                                 </tr>
-                            ) : receipts.length === 0 ? (
+                            ) : filteredReceipts.length === 0 ? (
                                 <tr>
                                     <td colSpan="7" className="py-8 text-center text-gray-500">
                                         <i className="fas fa-inbox mr-2"></i>
-                                        Chưa có biên lai nào
+                                        {searchTerm ? `Không tìm thấy kết quả cho "${searchTerm}"` : 'Chưa có biên lai nào'}
                                     </td>
                                 </tr>
                             ) : (
-                                receipts.map((receipt, index) => {
+                                filteredReceipts.map((receipt, index) => {
                                     const paymentStatus = getPaymentStatus(receipt.trangThaiThanhToan);
                                     return (
                                         <tr
@@ -545,14 +735,17 @@ const AccountingPage = () => {
                                                     onClick={() => handleViewDetail({
                                                         code: receipt.maVienPhi,
                                                         recordCode: receipt.maHoSo,
+                                                        maHoSo: receipt.maHoSo,
                                                         createdDate: formatDateTime(receipt.ngayTao),
                                                         collector: receipt.maNguoiThu || 'N/A',
                                                         totalAmount: parseFloat(receipt.tongTien),
+                                                        tongTien: receipt.tongTien,
                                                         patientPaid: parseFloat(receipt.tienBenhNhanTra),
                                                         insuranceRate: `${receipt.tyLeBaoHiem}%`,
                                                         insuranceAmount: parseFloat(receipt.tienBaoHiem),
                                                         status: receipt.trangThaiThanhToan === 1 ? 'paid' : 'unpaid',
                                                         note: receipt.ghiChu || '',
+                                                        tamUngs: receipt.tamUngs || [], // Thêm dữ liệu tạm ứng
                                                         services: receipt.chiTietVienPhi?.map(detail => ({
                                                             code: detail.maDichVu,
                                                             quantity: parseFloat(detail.soLuong),
