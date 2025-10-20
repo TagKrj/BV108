@@ -1,8 +1,16 @@
 import React from 'react';
 import PropTypes from 'prop-types';
 
-const DetailAccountingPopup = ({ isOpen, onClose, receiptData, onAdvanceClick, onCompleteClick, onPaymentClick }) => {
+const DetailAccountingPopup = ({ isOpen, onClose, receiptData, onAdvanceClick, onCompleteClick, onPaymentClick, onCancelClick }) => {
     if (!isOpen) return null;
+
+    // Handler for cancel button click
+    const handleCancelClick = () => {
+        // Không đóng popup hiện tại, chỉ mở popup hủy biên lai đè lên
+        if (onCancelClick) {
+            onCancelClick(receiptData);
+        }
+    };
 
     // Handler for advance button click
     const handleAdvanceClick = () => {
@@ -106,15 +114,8 @@ const DetailAccountingPopup = ({ isOpen, onClose, receiptData, onAdvanceClick, o
                                     </div>
                                 </div>
 
-                                {/* <div className="info-item border-b border-gray-200 pb-2 flex flex-row items-center justify-between">
-                                    <div className="text-sm text-gray-500">Tiền BN trả</div>
-                                    <div className="font-bold text-green-600 mt-1">
-                                        {receiptData?.patientPaid?.toLocaleString() || '200,000'} VNĐ
-                                    </div>
-                                </div> */}
-
                                 <div className="info-item border-b border-gray-200 pb-2 flex flex-row items-center justify-between">
-                                    <div className="text-sm text-gray-500">Tỷ lệ bảo hiểm</div>
+                                    <div className="text-sm text-gray-500">Tỷ lệ bảo hiểm chi trả</div>
                                     <div className="font-semibold text-gray-800 mt-1">
                                         {receiptData?.insuranceRate || '0%'}
                                     </div>
@@ -148,7 +149,30 @@ const DetailAccountingPopup = ({ isOpen, onClose, receiptData, onAdvanceClick, o
                                     </div>
                                 </div>
 
+
+                                <div className="info-item border-b border-gray-200 pb-2 flex flex-row items-center justify-between">
+                                    <div className="text-sm text-gray-500">Tiền BN phải trả</div>
+                                    <div className="font-bold text-green-600 mt-1">
+                                        {receiptData?.patientPaid?.toLocaleString() || '200,000'} VNĐ
+                                    </div>
+                                </div>
+
                                 {(() => {
+                                    // Nếu trạng thái đã thanh toán, luôn hiển thị "Đã thanh toán đủ"
+                                    if (receiptData?.status === 'paid') {
+                                        return (
+                                            <div className="info-item border-b border-gray-200 pb-2 flex flex-row items-center justify-between bg-green-50 -mx-3 px-3 py-2 rounded">
+                                                <div className="text-sm font-semibold text-gray-700">
+                                                    Đã thanh toán đủ
+                                                </div>
+                                                <div className="font-bold text-lg mt-1 text-green-700">
+                                                    0 VNĐ
+                                                </div>
+                                            </div>
+                                        );
+                                    }
+
+                                    // Nếu chưa thanh toán, tính toán như bình thường
                                     const tongTien = parseFloat(receiptData?.tongTien || 0);
                                     const tienBaoHiem = parseFloat(receiptData?.tienBaoHiem || 0);
                                     const tongTamUng = receiptData?.tamUngs?.reduce((sum, tu) => {
@@ -175,7 +199,11 @@ const DetailAccountingPopup = ({ isOpen, onClose, receiptData, onAdvanceClick, o
                                 <div className="info-item border-b border-gray-200 pb-2 flex flex-row items-center justify-between" >
                                     <div className="text-sm text-gray-500">Trạng thái</div>
                                     <div className="mt-1">
-                                        {receiptData?.status === 'paid' ? (
+                                        {receiptData?.status === 'cancelled' ? (
+                                            <span className="px-3 py-1 bg-gray-100 text-gray-500 rounded-full text-xs font-semibold">
+                                                ĐÃ HỦY
+                                            </span>
+                                        ) : receiptData?.status === 'paid' ? (
                                             <span className="px-3 py-1 bg-green-50 text-green-700 rounded-full text-xs font-semibold">
                                                 ĐÃ THANH TOÁN
                                             </span>
@@ -260,7 +288,7 @@ const DetailAccountingPopup = ({ isOpen, onClose, receiptData, onAdvanceClick, o
 
                             {/* Phân tích chi phí */}
                             <div className="grid grid-cols-1 gap-5 mt-6">
-                                <div className="summary-box bg-gradient-to-br from-[#2D5016] to-[#4A7C23] rounded-lg p-5 text-white">
+                                {/* <div className="summary-box bg-gradient-to-br from-[#2D5016] to-[#4A7C23] rounded-lg p-5 text-white">
                                     <div className="title flex items-center gap-2 mb-4 opacity-90">
                                         <i className="fas fa-chart-pie"></i>
                                         <span className="font-semibold">Phân tích chi phí</span>
@@ -291,7 +319,7 @@ const DetailAccountingPopup = ({ isOpen, onClose, receiptData, onAdvanceClick, o
                                             <span className="font-bold">{parseFloat(receiptData?.tienKhac || 0).toLocaleString()}</span>
                                         </div>
                                     </div>
-                                </div>
+                                </div> */}
 
                                 {/* Chi tiết tạm ứng */}
                                 {receiptData?.tamUngs && receiptData.tamUngs.filter(tu => !(tu.loaiTamUng === 3 && tu.trangThai === 3)).length > 0 && (
@@ -318,9 +346,9 @@ const DetailAccountingPopup = ({ isOpen, onClose, receiptData, onAdvanceClick, o
                                                             <div className="font-bold text-blue-600">
                                                                 {parseFloat(tamUng.soTien).toLocaleString()} VNĐ
                                                             </div>
-                                                            <div className="text-xs text-gray-500">
+                                                            {/* <div className="text-xs text-gray-500">
                                                                 Đã dùng: {parseFloat(tamUng.soTienDaSuDung || 0).toLocaleString()} VNĐ
-                                                            </div>
+                                                            </div> */}
                                                         </div>
                                                     </div>
                                                 ))}
@@ -365,6 +393,30 @@ const DetailAccountingPopup = ({ isOpen, onClose, receiptData, onAdvanceClick, o
                 {/* Modal Footer */}
                 <div className="modal-footer bg-[#F9FAFB] border-t border-gray-200 p-6 flex-shrink-0">
                     {(() => {
+                        // Nếu biên lai đã hủy, không hiển thị các nút hành động
+                        if (receiptData?.status === 'cancelled') {
+                            return (
+                                <div className="flex justify-center items-center py-4">
+                                    <div className="text-center">
+                                        <i className="fas fa-info-circle text-gray-400 text-2xl mb-2"></i>
+                                        <p className="text-gray-500 font-medium">Biên lai đã bị hủy, không thể thực hiện các thao tác</p>
+                                    </div>
+                                </div>
+                            );
+                        }
+
+                        // Nếu biên lai đã thanh toán, không hiển thị các nút hành động
+                        if (receiptData?.status === 'paid') {
+                            return (
+                                <div className="flex justify-center items-center py-4">
+                                    <div className="text-center">
+                                        <i className="fas fa-check-circle text-green-500 text-2xl mb-2"></i>
+                                        <p className="text-green-600 font-medium">Biên lai đã thanh toán hoàn tất</p>
+                                    </div>
+                                </div>
+                            );
+                        }
+
                         const tongTien = parseFloat(receiptData?.tongTien || 0);
                         const tienBaoHiem = parseFloat(receiptData?.tienBaoHiem || 0);
                         const tongTamUng = receiptData?.tamUngs?.reduce((sum, tu) => {
@@ -377,13 +429,16 @@ const DetailAccountingPopup = ({ isOpen, onClose, receiptData, onAdvanceClick, o
                         return (
                             <div className="flex flex-wrap justify-between gap-4">
                                 <div className="flex flex-wrap gap-2">
-                                    <button className="px-5 py-3 bg-gradient-to-br from-[#DC2626] to-[#B91C1C] text-white font-bold rounded-lg flex items-center gap-2">
+                                    <button
+                                        onClick={handleCancelClick}
+                                        className="px-5 py-3 bg-gradient-to-br from-[#DC2626] to-[#B91C1C] text-white font-bold rounded-lg flex items-center gap-2 hover:opacity-90 transition-opacity"
+                                    >
                                         <i className="fas fa-times-circle"></i>
                                         <span>Hủy/Hoàn biên lai</span>
                                     </button>
                                     <button
                                         onClick={handleAdvanceClick}
-                                        className="px-5 py-3 bg-gradient-to-br from-[#F59E0B] to-[#D97706] text-white font-bold rounded-lg flex items-center gap-2"
+                                        className="px-5 py-3 bg-gradient-to-br from-[#F59E0B] to-[#D97706] text-white font-bold rounded-lg flex items-center gap-2 hover:opacity-90 transition-opacity"
                                     >
                                         <i className="fas fa-wallet"></i>
                                         <span>Tạm ứng</span>
@@ -431,6 +486,7 @@ DetailAccountingPopup.propTypes = {
     onAdvanceClick: PropTypes.func,
     onCompleteClick: PropTypes.func,
     onPaymentClick: PropTypes.func,
+    onCancelClick: PropTypes.func,
     receiptData: PropTypes.shape({
         code: PropTypes.string,
         recordCode: PropTypes.string,
@@ -440,7 +496,7 @@ DetailAccountingPopup.propTypes = {
         patientPaid: PropTypes.number,
         insuranceRate: PropTypes.string,
         insuranceAmount: PropTypes.number,
-        status: PropTypes.oneOf(['paid', 'unpaid']),
+        status: PropTypes.oneOf(['paid', 'unpaid', 'cancelled']),
         note: PropTypes.string,
         services: PropTypes.arrayOf(
             PropTypes.shape({

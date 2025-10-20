@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import { useAdvancePayment } from '../../hooks/useAccounting';
 
-const AdvanceAccountingPopup = ({ isOpen, onClose, recordData }) => {
+const AdvanceAccountingPopup = ({ isOpen, onClose, recordData, onSuccess }) => {
     const { createAdvancePayment, loading } = useAdvancePayment();
     // Form states
     const [formData, setFormData] = useState({
@@ -85,7 +85,13 @@ const AdvanceAccountingPopup = ({ isOpen, onClose, recordData }) => {
 
             await createAdvancePayment(advanceData);
 
+            // Gọi hàm reload dữ liệu từ component cha TRƯỚC KHI đóng popup
+            if (onSuccess) {
+                await onSuccess();
+            }
+
             alert('Tạo phiếu tạm ứng thành công!');
+
             onClose();
         } catch (error) {
             console.error('Error creating advance payment:', error);
@@ -277,7 +283,8 @@ AdvanceAccountingPopup.propTypes = {
         recordCode: PropTypes.string,
         totalAmount: PropTypes.number,
         advancedAmount: PropTypes.number
-    })
+    }),
+    onSuccess: PropTypes.func
 };
 
 AdvanceAccountingPopup.defaultProps = {

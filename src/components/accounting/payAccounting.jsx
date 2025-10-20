@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import { useDischargePayment } from '../../hooks/useAccounting';
 
-const PayAccountingPopup = ({ isOpen, onClose, recordData }) => {
+const PayAccountingPopup = ({ isOpen, onClose, recordData, onSuccess }) => {
     const { createDischargePayment, loading } = useDischargePayment();
     const [isSubmitting, setIsSubmitting] = useState(false); // Prevent double submit
 
@@ -10,8 +10,9 @@ const PayAccountingPopup = ({ isOpen, onClose, recordData }) => {
     const [formData, setFormData] = useState({
         recordCode: recordData?.recordCode || 'HS001',
         advanceCodes: '', // Danh sách mã tạm ứng (ngăn cách bằng dấu phẩy)
-        discount: 0,
-        discountReason: '',
+        discount: 0, // Số tiền BN phải thanh toán (tienThucTra)
+        discountAmount: 0, // Tiền miễn giảm (nếu có)
+        discountReason: '', // Lý do miễn giảm
         notes: ''
     });
 
@@ -43,12 +44,29 @@ const PayAccountingPopup = ({ isOpen, onClose, recordData }) => {
         }
     }, [recordData, formData.discount]);
 
-    // Update record code when recordData changes
+    // Update record code and auto-fill payment amount when recordData changes
     useEffect(() => {
-        if (recordData && recordData.recordCode) {
+        if (recordData) {
+            // Tính tổng tất cả tạm ứng từ mảng tamUngs
+            const tongTamUng = recordData?.tamUngs?.reduce((sum, tu) => {
+                // Chỉ tính các tạm ứng không phải loại hoàn ứng
+                if (tu.loaiTamUng === 3 && tu.trangThai === 3) return sum;
+                return sum + parseFloat(tu.soTien || 0);
+            }, 0) || 0;
+
+            // Tính số tiền BN phải trả thêm
+            const tongTien = parseFloat(recordData?.tongTien || 0);
+            const tienBaoHiem = parseFloat(recordData?.tienBaoHiem || 0);
+            const tongHoanUng = parseFloat(recordData?.tongTienHoanUng || 0);
+            const conPhaiTra = tongTien - tienBaoHiem - tongTamUng + tongHoanUng;
+
+            // Số tiền BN phải thanh toán = conPhaiTra nếu > 0, ngược lại = 0
+            const soTienPhaiTra = conPhaiTra > 0 ? conPhaiTra : 0;
+
             setFormData(prev => ({
                 ...prev,
-                recordCode: recordData.recordCode
+                recordCode: recordData.recordCode || prev.recordCode,
+                discount: soTienPhaiTra // Auto-fill số tiền phải thanh toán
             }));
         }
         // Reset submitting state when popup opens
@@ -112,12 +130,18 @@ const PayAccountingPopup = ({ isOpen, onClose, recordData }) => {
                 danhSachTamUng: formData.advanceCodes
                     ? formData.advanceCodes.split(',').map(code => code.trim()).filter(code => code)
                     : [],
-                tienMienGiam: parseFloat(formData.discount) || 0,
+                tienThucTra: parseFloat(formData.discount) || 0, // Số tiền BN phải thanh toán (thực trả)
+                tienMienGiam: parseFloat(formData.discountAmount) || 0, // Tiền miễn giảm (nếu có)
                 lyDoMienGiam: formData.discountReason,
                 ghiChu: formData.notes
             };
 
             await createDischargePayment(dischargeData);
+
+            // Gọi hàm reload dữ liệu từ component cha TRƯỚC KHI đóng popup
+            if (onSuccess) {
+                await onSuccess();
+            }
 
             alert('Thanh toán ra viện thành công!');
             onClose();
@@ -165,7 +189,7 @@ const PayAccountingPopup = ({ isOpen, onClose, recordData }) => {
                 {/* Modal Body */}
                 <div className="p-6 overflow-y-auto">
                     {/* Summary Box */}
-                    <div className="mb-6 p-5 bg-gray-50 border border-gray-200 rounded-lg">
+                    {/* <div className="mb-6 p-5 bg-gray-50 border border-gray-200 rounded-lg">
                         <div className="flex items-center gap-2 text-gray-700 font-bold mb-4">
                             <i className="fas fa-receipt text-sm"></i>
                             <span>Tóm tắt thanh toán</span>
@@ -199,7 +223,7 @@ const PayAccountingPopup = ({ isOpen, onClose, recordData }) => {
                                 </span>
                             </div>
                         </div>
-                    </div>
+                    </div> */}
 
                     <form className="space-y-6">
                         {/* Mã hồ sơ */}
@@ -219,7 +243,7 @@ const PayAccountingPopup = ({ isOpen, onClose, recordData }) => {
                         </div>
 
                         {/* Danh sách mã tạm ứng */}
-                        <div className="form-group">
+                        {/* <div className="form-group">
                             <label className="block text-sm font-semibold text-gray-700 mb-1.5">
                                 Mã tạm ứng (ngăn cách bởi dấu phẩy)
                             </label>
@@ -234,38 +258,36 @@ const PayAccountingPopup = ({ isOpen, onClose, recordData }) => {
                                 />
                             </div>
                             <p className="text-xs text-gray-500 mt-1">Nhập các mã tạm ứng cần khấu trừ, ngăn cách bởi dấu phẩy</p>
-                        </div>
+                        </div> */}
 
-                        {/* Số tiền miễn giảm */}
+                        {/* Số tiền bệnh nhân phải thanh toán */}
                         <div className="form-group">
                             <div className="flex items-center mb-1.5">
                                 <label className="block text-sm font-semibold text-gray-700">
-                                    Số tiền miễn giảm
+                                    Số tiền bệnh nhân phải thanh toán
                                 </label>
                                 <span className="text-red-500 font-bold ml-1">*</span>
                             </div>
                             <div className="relative flex items-center">
                                 <input
-                                    type="number"
+                                    type="text"
                                     name="discount"
-                                    value={formData.discount}
-                                    onChange={handleChange}
-                                    className={`w-full p-3 bg-[#F9FAFB] border ${errors.discount ? 'border-red-500' : 'border-gray-200'} rounded-lg text-gray-700 focus:outline-none focus:border-[#F59E0B]`}
+                                    value={formData.discount.toLocaleString()}
+                                    readOnly
+                                    className="w-full p-3 bg-[#F9FAFB] border border-gray-200 rounded-lg text-gray-500 focus:outline-none cursor-not-allowed"
                                 />
                                 <div className="absolute right-3 font-semibold text-gray-500">
                                     VNĐ
                                 </div>
                             </div>
-                            {errors.discount && (
-                                <div className="error-message flex items-center mt-1.5 text-red-500">
-                                    <i className="fas fa-exclamation-circle text-xs mr-1.5"></i>
-                                    <span className="text-xs">Số tiền phải lớn hơn hoặc bằng 0</span>
-                                </div>
-                            )}
+                            <p className="text-xs text-blue-600 mt-1">
+                                <i className="fas fa-info-circle mr-1"></i>
+                                Tự động điền từ "BN phải trả thêm" hoặc "Đã thanh toán đủ" trong chi tiết biên lai
+                            </p>
                         </div>
 
                         {/* Lý do miễn giảm */}
-                        <div className="form-group">
+                        {/* <div className="form-group">
                             <label className="block text-sm font-semibold text-gray-700 mb-1.5">
                                 Lý do miễn giảm
                             </label>
@@ -277,7 +299,7 @@ const PayAccountingPopup = ({ isOpen, onClose, recordData }) => {
                                 className="w-full p-3 bg-[#F9FAFB] border border-gray-200 rounded-lg text-gray-700 focus:outline-none focus:border-[#F59E0B] resize-none"
                                 placeholder="Nhập lý do miễn giảm (nếu có)"
                             ></textarea>
-                        </div>
+                        </div> */}
 
                         {/* Ghi chú */}
                         <div className="form-group">
@@ -325,10 +347,15 @@ const PayAccountingPopup = ({ isOpen, onClose, recordData }) => {
 PayAccountingPopup.propTypes = {
     isOpen: PropTypes.bool.isRequired,
     onClose: PropTypes.func.isRequired,
+    onSuccess: PropTypes.func,
     recordData: PropTypes.shape({
         recordCode: PropTypes.string,
         totalAmount: PropTypes.number,
-        advancedAmount: PropTypes.number
+        advancedAmount: PropTypes.number,
+        tamUngs: PropTypes.array, // Danh sách tạm ứng
+        tongTien: PropTypes.number, // Tổng tiền biên lai
+        tienBaoHiem: PropTypes.number, // Tiền bảo hiểm
+        tongTienHoanUng: PropTypes.number // Tổng tiền đã hoàn ứng
     })
 };
 
@@ -336,7 +363,11 @@ PayAccountingPopup.defaultProps = {
     recordData: {
         recordCode: 'HS001',
         totalAmount: 200000,
-        advancedAmount: 150000
+        advancedAmount: 150000,
+        tamUngs: [],
+        tongTien: 0,
+        tienBaoHiem: 0,
+        tongTienHoanUng: 0
     }
 };
 

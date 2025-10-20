@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import { useCompletePayment } from '../../hooks/useAccounting';
 
-const CompleteAccountingPopup = ({ isOpen, onClose, recordData }) => {
+const CompleteAccountingPopup = ({ isOpen, onClose, recordData, onSuccess }) => {
     const { createCompletePayment, loading } = useCompletePayment();
     // Form states
     const [formData, setFormData] = useState({
@@ -30,18 +30,39 @@ const CompleteAccountingPopup = ({ isOpen, onClose, recordData }) => {
     // Update form data when recordData changes
     useEffect(() => {
         if (recordData) {
+            // Tính tổng tất cả tạm ứng từ mảng tamUngs
+            const tongTamUng = recordData?.tamUngs?.reduce((sum, tu) => {
+                // Chỉ tính các tạm ứng không phải loại hoàn ứng
+                if (tu.loaiTamUng === 3 && tu.trangThai === 3) return sum;
+                return sum + parseFloat(tu.soTien || 0);
+            }, 0) || 0;
+
+            // Tính số tiền cần hoàn lại cho BN
+            const tongTien = parseFloat(recordData?.tongTien || 0);
+            const tienBaoHiem = parseFloat(recordData?.tienBaoHiem || 0);
+            const tongHoanUng = parseFloat(recordData?.tongTienHoanUng || 0);
+            const conPhaiTra = tongTien - tienBaoHiem - tongTamUng + tongHoanUng;
+
+            // Số tiền hoàn ứng = giá trị tuyệt đối của "Cần hoàn lại cho BN" (nếu < 0)
+            const soTienHoanUng = conPhaiTra < 0 ? Math.abs(conPhaiTra) : 0;
+
+            // Lấy mã tạm ứng cuối cùng để hoàn ứng (nếu có)
+            const maTamUngCuoi = recordData?.tamUngs?.filter(tu => !(tu.loaiTamUng === 3 && tu.trangThai === 3))
+                .sort((a, b) => new Date(b.ngayTamUng) - new Date(a.ngayTamUng))[0]?.maTamUng || '';
+
             setFormData(prev => ({
                 ...prev,
                 recordCode: recordData.recordCode || prev.recordCode,
-                advanceCode: recordData.advanceCode || '',
-                advancedAmount: recordData.advancedAmount || 0,
-                usedAmount: recordData.usedAmount || 0
+                advanceCode: maTamUngCuoi,
+                advancedAmount: tongTamUng,
+                usedAmount: recordData.usedAmount || 0,
+                amount: soTienHoanUng // Auto-fill số tiền hoàn ứng
             }));
 
             setPreviewData(prev => ({
                 ...prev,
                 totalAmount: recordData.totalAmount || prev.totalAmount,
-                advancedAmount: recordData.advancedAmount || 0
+                advancedAmount: tongTamUng
             }));
         }
     }, [recordData]);
@@ -93,6 +114,11 @@ const CompleteAccountingPopup = ({ isOpen, onClose, recordData }) => {
             };
 
             await createCompletePayment(completeData);
+
+            // Gọi hàm reload dữ liệu từ component cha TRƯỚC KHI đóng popup
+            if (onSuccess) {
+                await onSuccess();
+            }
 
             alert('Hoàn ứng thành công!');
             onClose();
@@ -186,7 +212,7 @@ const CompleteAccountingPopup = ({ isOpen, onClose, recordData }) => {
                         {/* Số tiền đã tạm ứng */}
                         <div className="form-group">
                             <label className="block text-sm font-semibold text-gray-700 mb-1.5">
-                                Số tiền đã tạm ứng
+                                Tổng số tiền đã tạm ứng
                             </label>
                             <div className="relative flex items-center">
                                 <input
@@ -201,8 +227,7 @@ const CompleteAccountingPopup = ({ isOpen, onClose, recordData }) => {
                             </div>
                             <p className="text-xs text-gray-500 mt-1">
                                 <i className="fas fa-info-circle mr-1"></i>
-                                Đã sử dụng: {formData.usedAmount.toLocaleString()} VNĐ |
-                                Còn lại: {(formData.advancedAmount - formData.usedAmount).toLocaleString()} VNĐ
+                                Tổng tất cả các tạm ứng trong biên lai
                             </p>
                         </div>
 
@@ -216,28 +241,17 @@ const CompleteAccountingPopup = ({ isOpen, onClose, recordData }) => {
                             </div>
                             <div className="relative flex items-center">
                                 <input
-                                    type="number"
+                                    type="text"
                                     name="amount"
-                                    value={formData.amount}
-                                    onChange={handleChange}
-                                    max={formData.advancedAmount - formData.usedAmount}
-                                    className={`w-full p-3 bg-[#F9FAFB] border ${errors.amount ? 'border-red-500' : 'border-gray-200'} rounded-lg text-gray-700 focus:outline-none focus:border-[#2D5016]`}
+                                    value={formData.amount.toLocaleString()}
+                                    readOnly
+                                    className="w-full p-3 bg-[#F9FAFB] border border-gray-200 rounded-lg text-gray-500 focus:outline-none cursor-not-allowed"
                                 />
                                 <div className="absolute right-3 font-semibold text-gray-500">
                                     VNĐ
                                 </div>
                             </div>
-                            {errors.amount && (
-                                <div className="error-message flex items-center mt-1.5 text-red-500">
-                                    <i className="fas fa-exclamation-circle text-xs mr-1.5"></i>
-                                    <span className="text-xs">
-                                        {formData.amount <= 0
-                                            ? 'Số tiền phải lớn hơn 0'
-                                            : `Số tiền không được vượt quá ${(formData.advancedAmount - formData.usedAmount).toLocaleString()} VNĐ`
-                                        }
-                                    </span>
-                                </div>
-                            )}
+
                         </div>
 
                         {/* Ghi chú */}
@@ -314,8 +328,12 @@ CompleteAccountingPopup.propTypes = {
         advanceCode: PropTypes.string,
         advancedAmount: PropTypes.number,
         usedAmount: PropTypes.number,
-        tamUngs: PropTypes.array
-    })
+        tamUngs: PropTypes.array,
+        tongTien: PropTypes.number, // Tổng tiền biên lai
+        tienBaoHiem: PropTypes.number, // Tiền bảo hiểm
+        tongTienHoanUng: PropTypes.number // Tổng tiền đã hoàn ứng
+    }),
+    onSuccess: PropTypes.func
 };
 
 CompleteAccountingPopup.defaultProps = {
@@ -325,7 +343,10 @@ CompleteAccountingPopup.defaultProps = {
         advanceCode: '',
         advancedAmount: 0,
         usedAmount: 0,
-        tamUngs: []
+        tamUngs: [],
+        tongTien: 0,
+        tienBaoHiem: 0,
+        tongTienHoanUng: 0
     }
 };
 

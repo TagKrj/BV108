@@ -3,11 +3,12 @@ import DetailAccountingPopup from '../components/accounting/detailAccounting';
 import AdvanceAccountingPopup from '../components/accounting/advanceAccounting';
 import CompleteAccountingPopup from '../components/accounting/completeAccounting';
 import PayAccountingPopup from '../components/accounting/payAccounting';
+import CancelReceiptPopup from '../components/accounting/cancelReceipt';
 import { useReceipts, useMedicalRecords, useServices } from '../hooks/useAccounting';
 
 const AccountingPage = () => {
     // Sử dụng custom hook để quản lý danh sách biên lai
-    const { receipts, loading, error, fetchReceipts, createReceipt } = useReceipts();
+    const { receipts, loading, error, fetchReceipts, createReceipt, cancelReceipt } = useReceipts();
 
     // Sử dụng custom hook để quản lý danh sách bệnh án
     const {
@@ -34,17 +35,19 @@ const AccountingPage = () => {
     const [showCompletePopup, setShowCompletePopup] = useState(false);
     // State for discharge payment popup
     const [showPayPopup, setShowPayPopup] = useState(false);
+    // State for cancel receipt popup
+    const [showCancelPopup, setShowCancelPopup] = useState(false);
     const [selectedRecord, setSelectedRecord] = useState(null);
     const [formData, setFormData] = useState({
         patientCode: '',
         recordCode: '',
         recordType: '',
         notes: '',
+        insuranceRateGeneral: '', // Tỷ lệ bảo hiểm chung cho toàn biên lai
         // Thêm trường dịch vụ
         serviceCode: '',
         quantity: '',
-        unitPrice: '',
-        insuranceRate: ''
+        unitPrice: ''
     });
 
     // State lưu trữ dịch vụ đã thêm
@@ -101,6 +104,8 @@ const AccountingPage = () => {
     // Helper function: Lấy trạng thái thanh toán
     const getPaymentStatus = (status) => {
         switch (status) {
+            case -1:
+                return { label: 'ĐÃ HỦY', className: 'bg-gray-100 text-gray-500 line-through' };
             case 0:
                 return { label: 'CHƯA TT', className: 'bg-red-50 text-red-600' };
             case 1:
@@ -126,6 +131,11 @@ const AccountingPage = () => {
             return;
         }
 
+        if (formData.insuranceRateGeneral === '') {
+            alert('Vui lòng chọn tỷ lệ bảo hiểm');
+            return;
+        }
+
         if (services.length === 0) {
             alert('Vui lòng thêm ít nhất một dịch vụ');
             return;
@@ -133,6 +143,9 @@ const AccountingPage = () => {
 
         try {
             setSubmitting(true);
+
+            // Lấy tỷ lệ bảo hiểm chung
+            const generalInsuranceRate = parseFloat(formData.insuranceRateGeneral) || 0;
 
             // Chuẩn bị dữ liệu theo format BE
             const receiptData = {
@@ -142,7 +155,7 @@ const AccountingPage = () => {
                     maDichVu: service.serviceCode,
                     soLuong: parseFloat(service.quantity),
                     donGia: parseFloat(service.unitPrice),
-                    tyLeBaoHiem: parseFloat(service.insuranceRate) || 0
+                    tyLeBaoHiem: generalInsuranceRate // Áp dụng tỷ lệ BH chung cho tất cả dịch vụ
                 })),
                 ghiChu: formData.notes
             };
@@ -158,10 +171,10 @@ const AccountingPage = () => {
                 recordCode: '',
                 recordType: '',
                 notes: '',
+                insuranceRateGeneral: '',
                 serviceCode: '',
                 quantity: '',
-                unitPrice: '',
-                insuranceRate: ''
+                unitPrice: ''
             });
             setServices([]);
 
@@ -214,21 +227,19 @@ const AccountingPage = () => {
         const selectedService = servicesList.find(service => service.maDichVu === selectedServiceCode);
 
         if (selectedService) {
-            // Auto-fill số lượng (mặc định là 1), đơn giá, và tỷ lệ bảo hiểm
+            // Auto-fill số lượng (mặc định là 1) và đơn giá
             setFormData(prev => ({
                 ...prev,
                 serviceCode: selectedServiceCode,
                 quantity: '1', // Mặc định số lượng là 1
-                unitPrice: selectedService.donGia,
-                insuranceRate: selectedService.tyLeBaoHiem || '0'
+                unitPrice: selectedService.donGia
             }));
         } else {
             setFormData(prev => ({
                 ...prev,
                 serviceCode: selectedServiceCode,
                 quantity: '',
-                unitPrice: '',
-                insuranceRate: ''
+                unitPrice: ''
             }));
         }
     };
@@ -245,20 +256,18 @@ const AccountingPage = () => {
         const selectedService = servicesList.find(service => service.maDichVu === formData.serviceCode);
         const serviceName = selectedService ? selectedService.tenDichVu : formData.serviceCode;
 
-        // Tính thành tiền = Số lượng × Đơn giá × (Tỷ lệ BH / 100)
+        // Tính thành tiền = Số lượng × Đơn giá
         const quantity = parseFloat(formData.quantity);
         const unitPrice = parseFloat(formData.unitPrice);
-        const insuranceRate = parseFloat(formData.insuranceRate || 0);
-        const amount = quantity * unitPrice * (insuranceRate / 100);
+        const amount = quantity * unitPrice;
 
-        // Thêm dịch vụ vào danh sách
+        // Thêm dịch vụ vào danh sách (không cần lưu insuranceRate vì sẽ dùng chung)
         const newService = {
             id: Date.now(), // ID tạm thời
             serviceCode: formData.serviceCode,
             serviceName: serviceName, // Thêm tên dịch vụ để hiển thị
             quantity: formData.quantity,
             unitPrice: formData.unitPrice,
-            insuranceRate: formData.insuranceRate || 0,
             amount
         };
 
@@ -269,8 +278,7 @@ const AccountingPage = () => {
             ...prev,
             serviceCode: '',
             quantity: '',
-            unitPrice: '',
-            insuranceRate: ''
+            unitPrice: ''
         }));
     };
 
@@ -283,6 +291,80 @@ const AccountingPage = () => {
     const handleViewDetail = (receipt) => {
         setSelectedReceipt(receipt);
         setShowDetailPopup(true);
+    };
+
+    // Hàm reload dữ liệu và cập nhật popup chi tiết
+    const handleReloadAfterAdvance = async () => {
+        console.log('🔄 Bắt đầu reload dữ liệu...');
+        console.log('📋 selectedReceipt hiện tại:', selectedReceipt);
+
+        // Gọi lại API để lấy danh sách biên lai mới
+        const response = await fetchReceipts();
+
+        // Lấy dữ liệu từ response
+        let updatedReceipts = [];
+        if (Array.isArray(response)) {
+            updatedReceipts = response;
+        } else if (response?.data && Array.isArray(response.data)) {
+            updatedReceipts = response.data;
+        }
+
+        console.log('✅ Đã load được', updatedReceipts.length, 'biên lai');
+
+        // Nếu đang mở popup chi tiết, cập nhật lại thông tin biên lai
+        if (selectedReceipt && selectedReceipt.maVienPhi && updatedReceipts.length > 0) {
+            console.log('🔍 Tìm kiếm biên lai với mã:', selectedReceipt.maVienPhi);
+
+            // Tìm biên lai mới từ danh sách đã reload
+            const newReceiptData = updatedReceipts.find(r => r.maVienPhi === selectedReceipt.maVienPhi);
+
+            if (newReceiptData) {
+                console.log('✅ Tìm thấy biên lai mới:', newReceiptData);
+
+                // Cập nhật selectedReceipt với dữ liệu đầy đủ như khi click "Chi tiết"
+                setSelectedReceipt({
+                    id: newReceiptData.maVienPhi, // ID của biên lai (dùng cho API hủy)
+                    maVienPhi: newReceiptData.maVienPhi,
+                    code: newReceiptData.maVienPhi,
+                    recordCode: newReceiptData.maHoSo,
+                    maHoSo: newReceiptData.maHoSo,
+                    createdDate: formatDateTime(newReceiptData.ngayTao),
+                    collector: newReceiptData.maNguoiThu || 'N/A',
+                    totalAmount: parseFloat(newReceiptData.tongTien),
+                    tongTien: newReceiptData.tongTien,
+                    patientPaid: parseFloat(newReceiptData.tienBenhNhanTra),
+                    tienBenhNhanTra: newReceiptData.tienBenhNhanTra,
+                    insuranceRate: `${newReceiptData.tyLeBaoHiem}%`,
+                    insuranceAmount: parseFloat(newReceiptData.tienBaoHiem),
+                    tienBaoHiem: newReceiptData.tienBaoHiem,
+                    status: newReceiptData.trangThaiThanhToan === -1 ? 'cancelled' :
+                        newReceiptData.trangThaiThanhToan === 1 ? 'paid' : 'unpaid',
+                    note: newReceiptData.ghiChu || '',
+                    tienKham: newReceiptData.tienKham || 0,
+                    tienThuoc: newReceiptData.tienThuoc || 0,
+                    tienXetNghiem: newReceiptData.tienXetNghiem || 0,
+                    tienGiuong: newReceiptData.tienGiuong || 0,
+                    tienPhauThuat: newReceiptData.tienPhauThuat || 0,
+                    tienKhac: newReceiptData.tienKhac || 0,
+                    tamUngs: newReceiptData.tamUngs || [],
+                    tongTienHoanUng: newReceiptData.tongTienHoanUng || 0,
+                    chiTietHoanUng: newReceiptData.chiTietHoanUng || [],
+                    services: newReceiptData.chiTietVienPhi?.map(detail => ({
+                        code: detail.maDichVu,
+                        quantity: parseFloat(detail.soLuong),
+                        unitPrice: parseFloat(detail.donGia),
+                        amount: parseFloat(detail.thanhTien),
+                        insuranceAmount: parseFloat(detail.tienBaoHiem || 0)
+                    })) || []
+                });
+
+                console.log('✅ Đã cập nhật selectedReceipt với dữ liệu mới');
+            } else {
+                console.log('❌ Không tìm thấy biên lai trong danh sách mới');
+            }
+        } else {
+            console.log('ℹ️ Không có popup chi tiết đang mở hoặc không có dữ liệu');
+        }
     };
 
     // Xử lý hiển thị popup tạm ứng
@@ -311,7 +393,10 @@ const AccountingPage = () => {
             advanceCode: tamUng ? tamUng.maTamUng : '',
             advancedAmount: tamUng ? parseFloat(tamUng.soTien) : 0,
             usedAmount: tamUng ? parseFloat(tamUng.soTienDaSuDung || 0) : 0,
-            tamUngs: receipt.tamUngs || [] // Truyền toàn bộ danh sách tạm ứng
+            tamUngs: receipt.tamUngs || [], // Truyền toàn bộ danh sách tạm ứng
+            tongTien: parseFloat(receipt.tongTien || 0), // Tổng tiền biên lai
+            tienBaoHiem: parseFloat(receipt.tienBaoHiem || 0), // Tiền bảo hiểm
+            tongTienHoanUng: parseFloat(receipt.tongTienHoanUng || 0) // Tổng tiền đã hoàn ứng
         };
         setSelectedRecord(recordData);
         setShowCompletePopup(true);
@@ -323,10 +408,35 @@ const AccountingPage = () => {
         const recordData = {
             recordCode: receipt.recordCode,
             totalAmount: receipt.totalAmount,
-            advancedAmount: receipt.advancedAmount || 0
+            advancedAmount: receipt.advancedAmount || 0,
+            tamUngs: receipt.tamUngs || [], // Truyền toàn bộ danh sách tạm ứng
+            tongTien: parseFloat(receipt.tongTien || 0), // Tổng tiền biên lai
+            tienBaoHiem: parseFloat(receipt.tienBaoHiem || 0), // Tiền bảo hiểm
+            tongTienHoanUng: parseFloat(receipt.tongTienHoanUng || 0) // Tổng tiền đã hoàn ứng
         };
         setSelectedRecord(recordData);
         setShowPayPopup(true);
+    };
+
+    // Xử lý hiển thị popup hủy biên lai
+    const handleCancelClick = (receipt) => {
+        setSelectedReceipt(receipt);
+        setShowCancelPopup(true);
+    };
+
+    // Xử lý xác nhận hủy biên lai
+    const handleConfirmCancel = async (receiptId, reason) => {
+        try {
+            await cancelReceipt(receiptId, reason);
+            alert('Hủy biên lai thành công!');
+            setShowCancelPopup(false);
+            setShowDetailPopup(false);
+            // Reload danh sách biên lai
+            await fetchReceipts();
+        } catch (error) {
+            console.error('Error canceling receipt:', error);
+            alert(error.message || 'Không thể hủy biên lai. Vui lòng thử lại!');
+        }
     };
 
     // Xử lý tìm kiếm
@@ -334,28 +444,30 @@ const AccountingPage = () => {
         setSearchTerm(e.target.value);
     };
 
-    // Filter receipts dựa trên searchTerm
-    const filteredReceipts = receipts.filter(receipt => {
-        if (!searchTerm.trim()) return true;
+    // Filter receipts dựa trên searchTerm và đảo ngược thứ tự (mới nhất lên đầu)
+    const filteredReceipts = receipts
+        .filter(receipt => {
+            if (!searchTerm.trim()) return true;
 
-        const searchLower = searchTerm.toLowerCase().trim();
+            const searchLower = searchTerm.toLowerCase().trim();
 
-        // Tìm kiếm theo các trường
-        return (
-            // Mã viện phí
-            receipt.maVienPhi?.toLowerCase().includes(searchLower) ||
-            // Mã hồ sơ
-            receipt.maHoSo?.toLowerCase().includes(searchLower) ||
-            // Tiền bệnh nhân trả
-            receipt.tienBenhNhanTra?.toString().includes(searchLower) ||
-            // Tổng tiền
-            receipt.tongTien?.toString().includes(searchLower) ||
-            // Ngày tạo (format)
-            formatDate(receipt.ngayTao).includes(searchLower) ||
-            // Trạng thái (tìm theo text hiển thị)
-            getPaymentStatus(receipt.trangThaiThanhToan).label.toLowerCase().includes(searchLower)
-        );
-    });
+            // Tìm kiếm theo các trường
+            return (
+                // Mã viện phí
+                receipt.maVienPhi?.toLowerCase().includes(searchLower) ||
+                // Mã hồ sơ
+                receipt.maHoSo?.toLowerCase().includes(searchLower) ||
+                // Tiền bệnh nhân trả
+                receipt.tienBenhNhanTra?.toString().includes(searchLower) ||
+                // Tổng tiền
+                receipt.tongTien?.toString().includes(searchLower) ||
+                // Ngày tạo (format)
+                formatDate(receipt.ngayTao).includes(searchLower) ||
+                // Trạng thái (tìm theo text hiển thị)
+                getPaymentStatus(receipt.trangThaiThanhToan).label.toLowerCase().includes(searchLower)
+            );
+        })
+        .reverse(); // Đảo ngược mảng để item mới nhất lên đầu
 
     return (
         <div className="accounting-page">
@@ -439,7 +551,39 @@ const AccountingPage = () => {
                                 </p>
                             </div>
 
-                            {/* Form Group 3 - Ghi chú */}
+                            {/* Form Group 3 - Tỷ lệ bảo hiểm */}
+                            <div className="form-group mb-5">
+                                <label className="form-label block text-sm font-medium text-gray-700 mb-2">
+                                    Tỷ lệ bảo hiểm chi trả (%) <span className="text-red-500">*</span>
+                                </label>
+                                <div className="relative">
+                                    <select
+                                        name="insuranceRateGeneral"
+                                        value={formData.insuranceRateGeneral}
+                                        onChange={handleInputChange}
+                                        className="w-full h-[43px] px-4 border border-gray-300 rounded-lg appearance-none focus:outline-none focus:ring-2 focus:ring-[#2D5016] focus:border-transparent bg-white"
+                                    >
+                                        <option value="">Chọn tỷ lệ bảo hiểm</option>
+                                        <option value="0">0%</option>
+                                        <option value="20">20%</option>
+                                        <option value="40">40%</option>
+                                        <option value="60">60%</option>
+                                        <option value="80">80%</option>
+                                        <option value="100">100%</option>
+                                    </select>
+                                    <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
+                                        <svg width="12" height="6" viewBox="0 0 12 6" fill="none">
+                                            <path d="M1 1L6 5L11 1" stroke="#8C8C8C" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                                        </svg>
+                                    </div>
+                                </div>
+                                <p className="text-xs text-gray-500 mt-1">
+                                    <i className="fas fa-info-circle mr-1"></i>
+                                    Tỷ lệ bảo hiểm này sẽ áp dụng cho tất cả dịch vụ trong biên lai
+                                </p>
+                            </div>
+
+                            {/* Form Group 4 - Ghi chú */}
                             <div className="form-group mb-5">
                                 <label className="form-label block text-sm font-medium text-gray-700 mb-2">
                                     Ghi chú
@@ -530,28 +674,6 @@ const AccountingPage = () => {
                                     </p>
                                 </div>
 
-                                {/* Form Group - Tỷ lệ BH */}
-                                <div className="form-group">
-                                    <label className="form-label block text-sm font-medium text-gray-700 mb-2">
-                                        TL BH (%)
-                                    </label>
-                                    <input
-                                        type="number"
-                                        name="insuranceRate"
-                                        value={formData.insuranceRate}
-                                        onChange={handleInputChange}
-                                        placeholder="0"
-                                        min="0"
-                                        max="100"
-                                        className="w-[80px] h-[43px] px-4 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2D5016] focus:border-transparent bg-gray-100 cursor-not-allowed"
-                                        disabled={true}
-                                    />
-                                    <p className="text-xs text-gray-500 mt-1">
-                                        <i className="fas fa-info-circle mr-1"></i>
-                                        Tự động điền
-                                    </p>
-                                </div>
-
                                 {/* Button - Thêm dịch vụ */}
                                 <div className="form-group self-end">
                                     <button
@@ -574,7 +696,6 @@ const AccountingPage = () => {
                                                 <th className="p-4 text-left text-xs font-semibold text-gray-500">DỊCH VỤ</th>
                                                 <th className="p-4 text-center text-xs font-semibold text-gray-500">SỐ LƯỢNG</th>
                                                 <th className="p-4 text-center text-xs font-semibold text-gray-500">ĐƠN GIÁ</th>
-                                                <th className="p-4 text-center text-xs font-semibold text-gray-500">TL BH (%)</th>
                                                 <th className="p-4 text-center text-xs font-semibold text-gray-500">THÀNH TIỀN</th>
                                                 <th className="p-4 text-center text-xs font-semibold text-gray-500"></th>
                                             </tr>
@@ -585,7 +706,6 @@ const AccountingPage = () => {
                                                     <td className="p-4 text-sm text-gray-800">{service.serviceCode}</td>
                                                     <td className="p-4 text-sm text-gray-800 text-center">{service.quantity}</td>
                                                     <td className="p-4 text-sm text-gray-800 text-center">{parseFloat(service.unitPrice).toLocaleString()} ₫</td>
-                                                    <td className="p-4 text-sm text-gray-800 text-center">{service.insuranceRate || 0}%</td>
                                                     <td className="p-4 text-sm text-gray-800 text-center font-bold">{service.amount.toLocaleString()} ₫</td>
                                                     <td className="p-4 text-center">
                                                         <button
@@ -733,6 +853,8 @@ const AccountingPage = () => {
                                             <td className="py-4 px-4 text-center">
                                                 <button
                                                     onClick={() => handleViewDetail({
+                                                        id: receipt.maVienPhi, // ID của biên lai (dùng cho API hủy)
+                                                        maVienPhi: receipt.maVienPhi, // Thêm maVienPhi để có thể tìm lại sau khi reload
                                                         code: receipt.maVienPhi,
                                                         recordCode: receipt.maHoSo,
                                                         maHoSo: receipt.maHoSo,
@@ -745,7 +867,8 @@ const AccountingPage = () => {
                                                         insuranceRate: `${receipt.tyLeBaoHiem}%`,
                                                         insuranceAmount: parseFloat(receipt.tienBaoHiem),
                                                         tienBaoHiem: receipt.tienBaoHiem,
-                                                        status: receipt.trangThaiThanhToan === 1 ? 'paid' : 'unpaid',
+                                                        status: receipt.trangThaiThanhToan === -1 ? 'cancelled' :
+                                                            receipt.trangThaiThanhToan === 1 ? 'paid' : 'unpaid',
                                                         note: receipt.ghiChu || '',
                                                         // Thêm các trường chi phí
                                                         tienKham: receipt.tienKham || 0,
@@ -788,6 +911,7 @@ const AccountingPage = () => {
                 onAdvanceClick={handleAdvanceClick}
                 onCompleteClick={handleCompleteClick}
                 onPaymentClick={handlePaymentClick}
+                onCancelClick={handleCancelClick}
             />
 
             {/* Popup tạm ứng viện phí */}
@@ -795,6 +919,7 @@ const AccountingPage = () => {
                 isOpen={showAdvancePopup}
                 onClose={() => setShowAdvancePopup(false)}
                 recordData={selectedRecord}
+                onSuccess={handleReloadAfterAdvance}
             />
 
             {/* Popup hoàn ứng viện phí */}
@@ -802,6 +927,7 @@ const AccountingPage = () => {
                 isOpen={showCompletePopup}
                 onClose={() => setShowCompletePopup(false)}
                 recordData={selectedRecord}
+                onSuccess={handleReloadAfterAdvance}
             />
 
             {/* Popup thanh toán ra viện */}
@@ -809,6 +935,16 @@ const AccountingPage = () => {
                 isOpen={showPayPopup}
                 onClose={() => setShowPayPopup(false)}
                 recordData={selectedRecord}
+                onSuccess={handleReloadAfterAdvance}
+            />
+
+            {/* Popup hủy biên lai */}
+            <CancelReceiptPopup
+                isOpen={showCancelPopup}
+                onClose={() => setShowCancelPopup(false)}
+                receiptData={selectedReceipt}
+                onConfirm={handleConfirmCancel}
+                loading={loading}
             />
         </div>
     );
